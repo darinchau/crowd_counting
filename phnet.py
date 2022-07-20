@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 import torchvision.models as models
+from torchvision.models import VGG16_Weights
 FRAMES_PER_IMG = 3
 
 
@@ -24,7 +25,7 @@ class PHNet(nn.Module):
         self.CRPool = nn.Conv3d(3, 3, kernel_size=(2, 3, 3), stride=1, padding=(1, 1, 1), bias=False)
         self.relu = nn.ReLU()
         if not load_weights:
-            mod = models.vgg16(pretrained = True)
+            mod = models.vgg16(weights = VGG16_Weights.IMAGENET1K_V1)
             self._initialize_weights()
             #num = 0
             for i in range(len(self.frontend.state_dict().items())):
@@ -79,12 +80,3 @@ def make_layers(cfg, in_channels = 3,batch_norm=False,dilation = False):
                 #layers.append(CBAM(v, reduction_ratio=16, pool_types=['avg', 'max'], no_spatial=False))
             in_channels = v
     return nn.Sequential(*layers)
-
-def main():
-    model=PHNet()
-    x = torch.rand(1, 3, 3, 600, 400)
-    x = model(x)
-    print(x.shape)
-
-if __name__ == '__main__':
-    main()
