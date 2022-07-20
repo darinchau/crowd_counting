@@ -1,6 +1,5 @@
 import os
 from phnet import PHNet
-
 import torch
 import torch.nn as nn
 from torchvision import transforms
@@ -38,6 +37,11 @@ def main(args):
     with open(args.test_json, 'r') as outfile:
         val_list = json.load(outfile)
 
+    # Flush log file
+    with open("./" + args.logname, "w") as f:
+        pass
+
+
     # Set up gpu if available
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
@@ -45,7 +49,7 @@ def main(args):
     model = PHNet()
     model.to(device)
 
-    criterion = nn.MSELoss(size_average=False).to(device)
+    criterion = nn.MSELoss(reduction='sum').to(device)
     optimizer = torch.optim.Adam(model.parameters(), args.lr, betas=(0.9, 0.999), eps=1e-08, weight_decay=args.decay)
 
     # Sets up parallel computing
@@ -77,7 +81,7 @@ def main(args):
         batch_size = args.batch_size)
     
     # Sets up training history
-    history = History(len(train_dataloader.dataset), args.epochs)
+    history = History(len(train_dataloader.dataset), args.epochs, progress_bar = args.progress_bar)
 
     # Tries to load checkpoint. Everything is updated by reference
     Load_Checkpoint(args.pre, history, model, optimizer)
@@ -93,7 +97,7 @@ def main(args):
         test(test_dataloader, model, args.batch_size, history)
         
         with open("./" + args.logname, "a") as f:
-            f.write("epoch " + str(history.current_epoch) + "  mae: " +str(float(history.history["val_loss"][-1])))
+            f.write("epoch " + str(history.current_epoch) + "  mae: " +str(float(history.history["val_acc"][-1])))
             f.write("\n")
 
         # Saves checkpoint
@@ -115,7 +119,7 @@ def train(dataloader, model, optimizer, history, batch_size):
         y = y.type(torch.FloatTensor).unsqueeze(1).to(device)
 
         # Fwprop
-        loss, output = model(X, y)
+        loss, output = model(y, X)
 
         # Backprop
         optimizer.zero_grad()
@@ -125,7 +129,7 @@ def train(dataloader, model, optimizer, history, batch_size):
         mae = GAME(output.data, y, 0) / batch_size
 
         # Update the result
-        history.increment(batch * len(X), loss.item(), mae)
+        history.increment(batch * len(X), loss.item(), mae.item())
 
 
 def test(dataloader, model, batch_size, history):
@@ -142,7 +146,7 @@ def test(dataloader, model, batch_size, history):
     
     # mae /= number of data
     mae = mae/len(dataloader)/batch_size
-    history.validate(loss.item(), mae)
+    history.validate(loss.item(), mae.item())
     return mae
 
 
@@ -234,6 +238,7 @@ if __name__ == "__main__":
     parser.add_argument('--gpu',metavar='GPU', type=str, help='GPU id to use.', default="5")
     parser.add_argument('--task',metavar='TASK', type=str, help='task id to use.', default="1")
     parser.add_argument('--gt_code', metavar='GT_NUMBER' ,type=str, help='ground truth dataset number', default='4896')
+    parser.add_argument('--progress_bar', metavar='PBAR' ,type=bool, help='Whether to use progress bar or not', default=False)
 
     args = parser.parse_args()
 

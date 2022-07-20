@@ -11,7 +11,7 @@ import re
 import shutil
 import cv2
 import json
-from utility import Printer
+from utility import Printer, searchFile
 
 
 SOURCE_PATH = './venice'
@@ -74,16 +74,6 @@ def mycopyfile(srcfile,dstfile, verbose = False):
             os.makedirs(fpath)               
         shutil.copyfile(srcfile,dstfile)     
         if verbose: print("copy %s -> %s"%( srcfile,dstfile))
-
-
-# Search for all files within a folder and all its subfolders
-def searchFile(pathname,filename):
-    matchedFile = []
-    for root, dirs, files in os.walk(pathname):
-        for file in files:
-            if re.match(filename,file):
-                matchedFile.append((root,file))
-    return matchedFile
 
 # ROI = Region of interest
 def process_roi():

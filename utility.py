@@ -4,54 +4,66 @@ import torch
 import numpy as np
 import h5py
 import shutil
+import re
 
 # Progress bar
 # Initialize printer before use
 # Then update the printer using the print function in every iteration
 # Finally just let it kill itself or call printer.finish() to release the print flush
 class Printer:
-    def __init__(self, total_fr, description = " ", print_every = 0.2, len_bar = 40):
+    def __init__(self, total_fr, description = " ", print_every = 0.2, len_bar = 40, pad = 10, enabled = True):
         self.total_fr = total_fr
         self.print_every = print_every
         self.len_bar = len_bar
         self.last = ""
-        self.__enabled = True
+        self.__enabled = enabled
         self.description = description
         if description[-1] != " ":
             self.description += " "
         self.t = 0
-        self.last_t = 0
+        self.last_t = time.time()
         self.last_desc = ""
+        
+        # Do padding to avoid trailing zeros
+        self.pad = pad
+
+        self.print(0, "", True)
     
     def finish(self):
         if self.__enabled:
             self.print(self.total_fr, self.last_desc)
             self.__enabled = False
-            self.last = ""
             print()
     
-    def print_in(self, st):
-        print("\b" * len(self.last) + st + "\n" + self.last, end = "", flush = True)
+    def print_in(self, *args, **kwargs):
+        print("\b" * len(self.last), end = "")
+        print(*args, **kwargs)
+        if "end" in kwargs.keys() and kwargs["end"] != "\n":
+            print()
+        print(self.last, end = "", flush = True)
 
     
-    def print(self, fr, description = "data"):
+    def print(self, fr, description = "data", force = False):
         if not self.__enabled:
             return
         
-        if self.last_t == 0:
-            self.last_t = time.time()
+        # Increment time
+        # If time > print_every_time_interval or last one or force out:
+        #   do printing na
         
-        if fr >= self.total_fr - 1 or self.t >= self.print_every:
+        t = time.time()
+        self.t += t - self.last_t
+        self.last_t = t
+        self.last_desc = description
+        
+        if self.t >= self.print_every or fr >= self.total_fr - 1 or force:
             ratio = round((fr + 1)/self.total_fr * self.len_bar)
-            st = self.description + description + ": [" + ratio * "=" + (self.len_bar - ratio) * " " + "]  " + str(fr) + "/" + str(self.total_fr)
+            st = self.description + description + ": [" + ratio * "=" + (self.len_bar - ratio) * " " + "]  " + str(fr) + "/" + str(self.total_fr) + " " * self.pad
             print("\b" * len(self.last) + st, end = "", flush = True)
             self.t = 0
             self.last = st
-        else:
-            t = time.time()
-            self.t += t - self.last_t
-            self.last_t = t
-            self.last_desc = description
+        
+        self.last_desc = description
 
     def __del__(self):
         self.finish()
@@ -95,7 +107,7 @@ class Event():
             pass
 
 class History:
-    def __init__(self, total_data, total_epochs, seed = 42069):
+    def __init__(self, total_data, total_epochs, seed = 42069, progress_bar = True):
         # (Generate and) save the seed
         if seed is None:
             seed = np.random.randint(2147483647)
@@ -110,24 +122,28 @@ class History:
         self.best_val_acc = 0
         self.best_epoch = -1
         self.current_epoch = 0
-        self.epochs = total_epochs
+        self.epochs = progress_bar
         
         # Is_best is a temporary flag that gets set to true if the best epoch is updated
         self.is_Best = False
+        
+        # Makes a kill switch for the printer so its easier to have some fun
+        self.verbose = True
 
-    def new_epoch(self):
+    def new_epoch(self):        
         self.is_Best = False
         self.current_epoch += 1
-        description = f"Current epoch: {self.current_epoch}"
-        self.printer = Printer(self.total_data, description = description)
+        description = f"Current epoch: {self.current_epoch}, "
+        self.printer = Printer(self.total_data, description = description, enabled = self.verbose)
+        
         self.correct = 0
     
     def increment(self, current_progress, train_loss, train_acc):
         self.history["train_loss"].append(train_loss)
         self.history["train_acc"].append(train_acc)
-
+        
         # len(X) is really batch size. Makes the fancy progress bar thing
-        description = f"loss: {round(train_loss, 5)} "
+        description = f"loss: {round(train_loss, 5)}, acc: {round(train_acc, 5)} "
         self.printer.print(current_progress, description)
     
     def validate(self, val_loss, val_acc):
@@ -141,6 +157,7 @@ class History:
             self.is_Best = True
         
         self.printer.finish()
+        print(f"Validation: loss = {val_loss}, MAE = {val_acc}")
 
 
     def load(self, src):
@@ -152,6 +169,9 @@ class History:
         self.best_val_acc = src.best_val_acc
         self.best_epoch = src.best_epoch
         self.current_epoch = src.current_epoch
+
+    def print(self, *args, **kwargs):
+        self.printer.print_in(*args, **kwargs)
 
 
 def save_net(fname, net):
@@ -173,3 +193,13 @@ def save_checkpoint(state, is_best,task_id, epoch, filename='checkpoint.pth', pa
     if is_best:
         torch.save(state, path + "/" + task_id + "_" + str(epoch)+ filename)
         shutil.copyfile(path + "/" + task_id + "_" + str(epoch)+ filename, path + "/" + task_id+'model_best.pth')
+
+
+# Search for all files within a folder and all its subfolders
+def searchFile(pathname,filename):
+    matchedFile = []
+    for root, dirs, files in os.walk(pathname):
+        for file in files:
+            if re.match(filename,file):
+                matchedFile.append((root,file))
+    return matchedFile

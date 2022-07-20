@@ -8,6 +8,8 @@ import torch
 from torchvision import transforms
 from torch.utils.data import Dataset
 import torchvision.transforms.functional as F
+from utility import searchFile
+import matplotlib.pyplot as plt
 
 class listDataset(Dataset):
     def __init__(self, root, shape=None, shuffle=True, transform=None,  train=False, seen=0, direct=False, batch_size=1, num_workers=4, gt_code=1):
@@ -37,7 +39,7 @@ class listDataset(Dataset):
             return img,target,img_r
         return img,target
 
-def load_data(img_path,train = True, direct = False, code = 1):
+def load_data(img_path, train = True, direct = False, code = 1):
     transform=transforms.Compose([
                        transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225]) ])
@@ -45,12 +47,18 @@ def load_data(img_path,train = True, direct = False, code = 1):
     transform2 = transforms.ToTensor()
     gt_path = img_path.replace('.png','.h5').replace("img1",'target'+code).replace('.jpg','.h5')
 
+    # print(gt_path)
+
     for root, dir, filenames in os.walk(img_path):
+        # root, dir, filenames looks like ./venice/ablation3\4896_004260.jpg [] ['4896_004140.jpg', '4896_004200.jpg', '4896_004260.jpg']
         if train is True:
             aug = 0
         else:
             aug = 0
+        
+        # Process each files
         for i in range(len(filenames)):
+            # Process the first image differently
             if i == 0:
                 img =  np.array(Image.open(img_path + "/" + filenames[i]).convert('RGB'))
                 if direct is True:
@@ -83,11 +91,24 @@ def load_data(img_path,train = True, direct = False, code = 1):
                     new_image = new_image.unsqueeze(dim = 1)
                 image = torch.cat([image, new_image], axis = 1)
 
-    gt_file = h5py.File(gt_path)
+
+    # Loads the target (density map files) - first try to load directly from path but also try a search
+    try:
+        gt_file = h5py.File(gt_path)
+    except:
+        img_name = gt_path.split("\\")[-1]
+        candidates = searchFile("./venice", img_name)
+        if len(candidates) != 1:
+            raise AssertionError(f"Found incorrect number of files! Files with name {img_name} found: {len(candidates)}")
+        gt_file = h5py.File(candidates[0][0] + "\\" + candidates[0][1])
+    
     target = np.asarray(gt_file['density'])
     if aug == 1:
         target = np.fliplr(target)
     if aug == 2:
         target = target[dx:crop_size[0]+dx,dy:crop_size[1]+dy]
     target = cv2.resize(target,(int(np.floor(image.shape[3]/8)), int(np.floor(image.shape[2]/8))),interpolation = cv2.INTER_CUBIC)*64
+
+    # print(target.shape)
+    # print(image.shape)
     return image,target
