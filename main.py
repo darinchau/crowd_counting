@@ -8,12 +8,20 @@ import json
 import data as dataset
 import time
 from utility import History, save_checkpoint
+import random
+from PIL import Image
+import numpy as np
+import h5py
+import cv2
+from torch.utils.data import Dataset
+import torchvision.transforms.functional as F
+from utility import searchFile
 
 # Args namespace holds all variables about the training
 
 
 def main(args):
-    global device
+    global device, root
 
     # Learning rate and initial learning rate. We use learning rate decay to adjust for larger epochs to avoid overfitting
     args.original_lr    = 1e-6
@@ -30,15 +38,17 @@ def main(args):
     args.workers        = 4
     args.logname        = "logs.txt"
 
+    root = args.user_dir
+
     # Load list of file for list of files to train and test
-    with open(args.train_json, 'r') as outfile:
+    with open(root + args.train_json, 'r') as outfile:
         train_list = json.load(outfile)
 
-    with open(args.test_json, 'r') as outfile:
+    with open(root + args.test_json, 'r') as outfile:
         val_list = json.load(outfile)
 
     # Flush log file
-    with open("./" + args.logname, "w") as f:
+    with open(root + "" + args.logname, "w") as f:
         pass
 
 
@@ -96,7 +106,7 @@ def main(args):
         # Testing loop
         test(test_dataloader, model, args.batch_size, history)
         
-        with open("./" + args.logname, "a") as f:
+        with open(root + "" + args.logname, "a") as f:
             f.write("epoch " + str(history.current_epoch) + "  mae: " +str(float(history.history["val_acc"][-1])))
             f.write("\n")
 
@@ -105,7 +115,7 @@ def main(args):
             'state_dict': model.state_dict(),
             'optimizer' : optimizer.state_dict(),
             'history': history,
-        }, history.is_Best, args.task, epoch = history.current_epoch, path='./ckpt/'+args.task)
+        }, history.is_Best, args.task, epoch = history.current_epoch, path= root + "ckpt/"+args.task)
 
 
 # Main training loop
@@ -231,17 +241,16 @@ if __name__ == "__main__":
     # python model/train.py /dataset/Venice/train_data.json /dataset/Venice/test_data.json
     # Environment variables
     parser = argparse.ArgumentParser(description='UROP 1100')
-    parser.add_argument('--train_json', metavar='TRAIN', help='path to train json', default="./jsons/train3.json")
-    parser.add_argument('--test_json', metavar='TEST', help='path to test json', default="./jsons/test3.json")
+    parser.add_argument('--train_json', metavar='TRAIN', help='path to train json', default="jsons/train3.json")
+    parser.add_argument('--test_json', metavar='TEST', help='path to test json', default="jsons/test3.json")
     parser.add_argument('--pre', '-p', metavar='PRETRAINED', default=None,type=str, help='path to the pretrained model')
     parser.add_argument('--batch_size', '-bs', metavar='BATCHSIZE' ,type=int, help='batch size', default=2)
     parser.add_argument('--gpu',metavar='GPU', type=str, help='GPU id to use.', default="5")
     parser.add_argument('--task',metavar='TASK', type=str, help='task id to use.', default="1")
     parser.add_argument('--gt_code', metavar='GT_NUMBER' ,type=str, help='ground truth dataset number', default='4896')
     parser.add_argument('--progress_bar', metavar='PBAR' ,type=bool, help='Whether to use progress bar or not', default=False)
+    parser.add_argument('--user_dir', metavar="USERDIR", type=str, default="./")
 
     args = parser.parse_args()
 
     main(args)
-
-

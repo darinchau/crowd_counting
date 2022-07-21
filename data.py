@@ -3,13 +3,11 @@ import os
 from PIL import Image
 import numpy as np
 import h5py
-import cv2
 import torch
 from torchvision import transforms
 from torch.utils.data import Dataset
 import torchvision.transforms.functional as F
 from utility import searchFile
-import matplotlib.pyplot as plt
 
 class listDataset(Dataset):
     def __init__(self, root, shape=None, shuffle=True, transform=None,  train=False, seen=0, direct=False, batch_size=1, num_workers=4, gt_code=1):
@@ -107,8 +105,13 @@ def load_data(img_path, train = True, direct = False, code = 1):
         target = np.fliplr(target)
     if aug == 2:
         target = target[dx:crop_size[0]+dx,dy:crop_size[1]+dy]
-    target = cv2.resize(target,(int(np.floor(image.shape[3]/8)), int(np.floor(image.shape[2]/8))),interpolation = cv2.INTER_CUBIC)*64
+        
+    # Note: Using PIL instead of OpenCV produces an average pixel difference of about 0.002. Insignificant sure but also something noteworthy
+    t = Image.fromarray(target)
+    size = (int(np.floor(image.shape[3]/8)), int(np.floor(image.shape[2]/8)))
+    t = t.resize(size, Image.BICUBIC)
+    t = np.array(t, dtype = target.dtype) * 64
 
     # print(target.shape)
     # print(image.shape)
-    return image,target
+    return image, t

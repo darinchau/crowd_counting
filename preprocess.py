@@ -1,8 +1,6 @@
 import os
 import mat4py
 import h5py
-import scipy.io as io
-import PIL.Image as Image
 import numpy as np
 import scipy
 import scipy.spatial as ss
@@ -149,7 +147,10 @@ def make_3d_dataset():
         json.dump(test_json, json_file, indent=1)
         print(len(test_json))
 
-if __name__ == "__main__":
+def preprocess():
     make_density_map()
     process_roi()
     make_3d_dataset()
+    
+if __name__ == "__main__":
+    preprocess()
