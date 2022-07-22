@@ -7,10 +7,10 @@ import torch
 from torchvision import transforms
 from torch.utils.data import Dataset
 import torchvision.transforms.functional as F
-from utility import searchFile
+from utility import searchFile, hehehaha
 
 class listDataset(Dataset):
-    def __init__(self, root, shape=None, shuffle=True, transform=None,  train=False, seen=0, direct=False, batch_size=1, num_workers=4, gt_code=1):
+    def __init__(self, root, root_dir, shape=None, shuffle=True, transform=None,  train=False, seen=0, direct=False, batch_size=1, num_workers=4, gt_code=1):
         if train:
             root = root
         random.shuffle(root)
@@ -24,6 +24,7 @@ class listDataset(Dataset):
         self.num_workers = num_workers
         self.direct=direct 
         self.gt_code = gt_code
+        self.root_dir = root_dir
 
     def __len__(self):
         return self.nSamples
@@ -31,28 +32,26 @@ class listDataset(Dataset):
     def __getitem__(self, index):
         assert index <= len(self), 'index range error'         
         img_path = self.lines[index]
-        img,target = load_data(img_path, False,code=self.gt_code)
-        img_r = load_data(img_path, False, direct = True, code=self.gt_code)
+        img,target = load_data(img_path, self.root_dir, False,code=self.gt_code)
+        img_r = load_data(img_path, self.root_dir, False, direct = True, code=self.gt_code)
         if self.direct:
             return img,target,img_r
         return img,target
 
-def load_data(img_path, train = True, direct = False, code = 1):
+def load_data(img_path, root_dir, train = True, direct = False, code = 1):
     transform=transforms.Compose([
                        transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225]) ])
 
     transform2 = transforms.ToTensor()
-    gt_path = img_path.replace('.png','.h5').replace("img1",'target'+code).replace('.jpg','.h5')
 
-    # print(gt_path)
+    gt_path = img_path.replace('.png','.h5').replace("img1",'target'+code).replace('.jpg','.h5').replace("\\", "/")
+    img_path = img_path.replace("\\", "/")
+
+    aug = 0
 
     for root, dir, filenames in os.walk(img_path):
         # root, dir, filenames looks like ./venice/ablation3\4896_004260.jpg [] ['4896_004140.jpg', '4896_004200.jpg', '4896_004260.jpg']
-        if train is True:
-            aug = 0
-        else:
-            aug = 0
         
         # Process each files
         for i in range(len(filenames)):
@@ -94,11 +93,13 @@ def load_data(img_path, train = True, direct = False, code = 1):
     try:
         gt_file = h5py.File(gt_path)
     except:
-        img_name = gt_path.split("\\")[-1]
-        candidates = searchFile("./venice", img_name)
+        img_name = gt_path.split("/")[-1]
+        candidates = searchFile(root_dir + "venice", img_name)
         if len(candidates) != 1:
-            raise AssertionError(f"Found incorrect number of files! Files with name {img_name} found: {len(candidates)}")
-        gt_file = h5py.File(candidates[0][0] + "\\" + candidates[0][1])
+            raise AssertionError(f"Found incorrect number of files! Files with name {img_name} found at root path {root_dir}/venice: {len(candidates)}")
+        # print("HEHEHAHA")
+        # print(*candidates)
+        gt_file = h5py.File(candidates[0][0] + "/" + candidates[0][1])
     
     target = np.asarray(gt_file['density'])
     if aug == 1:
@@ -112,6 +113,4 @@ def load_data(img_path, train = True, direct = False, code = 1):
     t = t.resize(size, Image.BICUBIC)
     t = np.array(t, dtype = target.dtype) * 64
 
-    # print(target.shape)
-    # print(image.shape)
     return image, t

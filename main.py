@@ -12,7 +12,6 @@ import random
 from PIL import Image
 import numpy as np
 import h5py
-import cv2
 from torch.utils.data import Dataset
 import torchvision.transforms.functional as F
 from utility import searchFile
@@ -38,6 +37,8 @@ def main(args):
     args.workers        = 4
     args.logname        = "logs.txt"
 
+    print(args.progress_bar, args.debug)
+
     root = args.user_dir
 
     # Load list of file for list of files to train and test
@@ -50,8 +51,12 @@ def main(args):
     # Flush log file
     with open(root + "" + args.logname, "w") as f:
         pass
+    
+    tl = [root + dir[2:] for dir in train_list]
+    vl = [root + dir[2:] for dir in val_list]
 
-
+    train_list, val_list = tl, vl
+    
     # Set up gpu if available
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
@@ -69,6 +74,7 @@ def main(args):
     train_dataloader = torch.utils.data.DataLoader(
         dataset.listDataset(train_list,
                        shuffle = True,
+                       root_dir = root,
                        transform = transforms.Compose([
                        transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225]),
@@ -82,6 +88,7 @@ def main(args):
     test_dataloader = torch.utils.data.DataLoader(
         dataset.listDataset(val_list,
                     shuffle=False,
+                    root_dir = root,
                     gt_code = args.gt_code,
                     transform=transforms.Compose([
                         transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406],
@@ -91,7 +98,7 @@ def main(args):
         batch_size = args.batch_size)
     
     # Sets up training history
-    history = History(len(train_dataloader.dataset), args.epochs, progress_bar = args.progress_bar)
+    history = History(len(train_dataloader.dataset), args.epochs, seed = None, progress_bar = args.progress_bar)
 
     # Tries to load checkpoint. Everything is updated by reference
     Load_Checkpoint(args.pre, history, model, optimizer)
@@ -101,7 +108,7 @@ def main(args):
         adjust_learning_rate(optimizer, history.current_epoch)
 
         # Training loop
-        train(train_dataloader, model, optimizer, history, args.batch_size)
+        train(train_dataloader, model, optimizer, history, args.batch_size, test_mode=args.debug)
 
         # Testing loop
         test(test_dataloader, model, args.batch_size, history)
@@ -119,27 +126,36 @@ def main(args):
 
 
 # Main training loop
-def train(dataloader, model, optimizer, history, batch_size):
+def train(dataloader, model, optimizer, history, batch_size, test_mode = False):
     history.new_epoch()    
     model.train()
     for batch, (X, y) in enumerate(dataloader):
-        # Prepares the data: move to cuda if available
-        X, y = X.to(device), y.to(device)
-        X = X.type(torch.FloatTensor)
-        y = y.type(torch.FloatTensor).unsqueeze(1).to(device)
+        loss = mae = 0
+        
+        if test_mode:
+            time.sleep(1e-9)
+            print(X.shape, y.shape)
 
-        # Fwprop
-        loss, output = model(y, X)
+        else:
+            # Prepares the data: move to cuda if available
+            X, y = X.to(device), y.to(device)
+            X = X.type(torch.FloatTensor)
+            y = y.type(torch.FloatTensor).unsqueeze(1).to(device)
 
-        # Backprop
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            # Fwprop
+            loss, output = model(y, X)
 
-        mae = GAME(output.data, y, 0) / batch_size
+            # Backprop
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            mae = GAME(output.data, y, 0) / batch_size
+
+            loss, mae = loss.item(), mae.item()
 
         # Update the result
-        history.increment(batch * len(X), loss.item(), mae.item())
+        history.increment(batch * len(X), loss, mae)
 
 
 def test(dataloader, model, batch_size, history):
@@ -249,6 +265,7 @@ if __name__ == "__main__":
     parser.add_argument('--task',metavar='TASK', type=str, help='task id to use.', default="1")
     parser.add_argument('--gt_code', metavar='GT_NUMBER' ,type=str, help='ground truth dataset number', default='4896')
     parser.add_argument('--progress_bar', metavar='PBAR' ,type=bool, help='Whether to use progress bar or not', default=False)
+    parser.add_argument('--debug', metavar='PBAR' ,type=bool, help='Whether to actually pass the model through the data or not', default=False)
     parser.add_argument('--user_dir', metavar="USERDIR", type=str, default="./")
 
     args = parser.parse_args()

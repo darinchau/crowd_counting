@@ -6,6 +6,8 @@ import h5py
 import shutil
 import re
 
+hehehaha = "hehehaha"
+
 # Progress bar
 # Initialize printer before use
 # Then update the printer using the print function in every iteration
@@ -107,7 +109,7 @@ class Event():
             pass
 
 class History:
-    def __init__(self, total_data, total_epochs, seed = 42069, progress_bar = True):
+    def __init__(self, total_data, epochs, seed = 42069, progress_bar = True):
         # (Generate and) save the seed
         if seed is None:
             seed = np.random.randint(2147483647)
@@ -122,13 +124,13 @@ class History:
         self.best_val_acc = 0
         self.best_epoch = -1
         self.current_epoch = 0
-        self.epochs = progress_bar
+        self.epochs = epochs
         
         # Is_best is a temporary flag that gets set to true if the best epoch is updated
         self.is_Best = False
         
         # Makes a kill switch for the printer so its easier to have some fun
-        self.verbose = True
+        self.verbose = progress_bar
 
     def new_epoch(self):        
         self.is_Best = False
