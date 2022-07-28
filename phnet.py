@@ -1,7 +1,5 @@
 import torch.nn as nn
 import torch
-import torch.nn.functional as F
-import torch.utils.model_zoo as model_zoo
 import torchvision.models as models
 from torchvision.models import VGG16_Weights
 FRAMES_PER_IMG = 3
@@ -22,12 +20,11 @@ class PHNet(nn.Module):
         self.backend = make_layers(self.backend_feat, in_channels = 512, dilation = 2)
         self.backend2 = make_layers(self.backend_feat2, in_channels = 512, dilation = 2)
         self.output_layer = nn.Conv2d(192, 1, kernel_size=1)
-        self.CRPool = nn.Conv3d(3, 3, kernel_size=(2, 3, 3), stride=1, padding=(1, 1, 1), bias=False)
+        self.CRPool = nn.Conv3d(in_channels=3, out_channels=3, kernel_size=(2, 3, 3), stride=1, padding=(1, 1, 1), bias=False)
         self.relu = nn.ReLU()
         if not load_weights:
-            mod = models.vgg16(weights = VGG16_Weights.IMAGENET1K_V1)
+            mod = models.vgg16(weights=VGG16_Weights.DEFAULT)
             self._initialize_weights()
-            #num = 0
             for i in range(len(self.frontend.state_dict().items())):
                 list(self.frontend.state_dict().items())[i][1].data[:] = list(mod.state_dict().items())[i][1].data[:]
                 list(self.frontend2.state_dict().items())[i][1].data[:] = list(mod.state_dict().items())[i][1].data[:]
