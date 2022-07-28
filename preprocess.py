@@ -147,10 +147,10 @@ def make_3d_dataset():
         json.dump(test_json, json_file, indent=1)
         print(len(test_json))
 
-def preprocess():
+def venice():
     make_density_map()
     process_roi()
     make_3d_dataset()
     
 if __name__ == "__main__":
-    preprocess()
+    venice()
