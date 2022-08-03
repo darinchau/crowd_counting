@@ -16,20 +16,25 @@ SOURCE_PATH = './venice'
 IMG_ROI_PATH = './venice/img_roi'
 ROI_PATH = './venice/density_map_init'
 
+# number of images per set of data (image/frame etc)
 IMAGE_NUM = 3
 
 EXPORT_PATH = './venice/ablation' + str(IMAGE_NUM)
 
-# Performs Gaussian filter on an image. This seems to work perfectly for now so I will take it for granted
-def gaussian_filter_density_new(gt, sigma=5):
+# This originally says it performs gaussian filter but actually does two things
+# coords = data['annotations'], which is a list of list with 2 elements; they are the image coordinates of the position of the humans in the crowd
+# First the function creates an image and makes a "one-hot" encoding of the crowd in the pt2d image
+# sigma = 5: Then the function performs Gaussian filtering for each one-hot encoded person
+# Gaussian filter is a type of blurrnig with the Gaussian distribution function, where we can get predefined kernels
+def coords_to_density_map(coords, sigma=5):
     sha = (720, 1280)
     density = np.zeros(sha, dtype=np.float32)
-    for i in range(len(gt)):
+    for i in range(len(coords)):
         pt2d = np.zeros(sha, dtype=np.float32)
         try:
-            pt2d[gt[i][1], gt[i][0]] = 1.
+            pt2d[coords[i][1], coords[i][0]] = 1.
         except:
-            pt2d[gt[i][1]-1, gt[i][0]-1] = 1.
+            pt2d[coords[i][1]-1, coords[i][0]-1] = 1.
         density += ndimage.gaussian_filter(pt2d, sigma, mode='constant')
     return density
 
@@ -53,7 +58,7 @@ def make_density_map():
             data = mat4py.loadmat(os.path.join(list1[i][0], list1[i][1]))
         except:
             data = h5py.File(os.path.join(list1[i][0],list1[i][1]), 'r')
-        map = gaussian_filter_density_new(data['annotation'], 5)
+        map = coords_to_density_map(data['annotation'], 5)
         path = os.path.join(ROI_PATH, list1[i][1]).replace('.mat','.h5')
         if not os.path.exists(ROI_PATH):
                 os.makedirs(ROI_PATH)
