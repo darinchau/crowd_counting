@@ -36,15 +36,7 @@ class Printer:
             self.print(self.total_fr, self.last_desc)
             self.__enabled = False
             print()
-    
-    def print_in(self, *args, **kwargs):
-        print("\b" * len(self.last), end = "")
-        print(*args, **kwargs)
-        if "end" in kwargs.keys() and kwargs["end"] != "\n":
-            print()
-        print(self.last, end = "", flush = True)
-
-    
+  
     def print(self, fr, description = "data", force = False):
         if not self.__enabled:
             return
@@ -59,7 +51,7 @@ class Printer:
         self.last_desc = description
         
         if self.t >= self.print_every or fr >= self.total_fr - 1 or force:
-            ratio = round((fr + 1)/self.total_fr * self.len_bar)
+            ratio = round(fr/self.total_fr * self.len_bar)
             st = self.description + description + ": [" + ratio * "=" + (self.len_bar - ratio) * " " + "]  " + str(fr) + "/" + str(self.total_fr) + " " * self.pad
             print("\b" * len(self.last) + st, end = "", flush = True)
             self.t = 0

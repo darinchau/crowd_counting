@@ -16,7 +16,7 @@ IMAGE_NUM = 3
 
 # This originally says it performs gaussian filter but actually does two things
 # coords = data['annotations'], which is a list of list with 2 elements; they are the image coordinates of the position of the humans in the crowd
-# First the function creates an image and makes a "one-hot" encoding of the crowd in the pt2d image
+# First the function creates an image and makes a "one-hot" encoding of the person in the pt2d image
 # sigma = 5: Then the function performs Gaussian filtering for each one-hot encoded person
 # Gaussian filter is a type of blurrnig with the Gaussian Normal distribution function, where we can get predictable kernels
 def coords_to_density_map(coords, sigma=5):
@@ -30,19 +30,6 @@ def coords_to_density_map(coords, sigma=5):
             pt2d[coords[i][1]-1, coords[i][0]-1] = 1.
         density += ndimage.gaussian_filter(pt2d, sigma, mode='constant')
     return density
-
-# Returns true if the splitting of the frames are normal  
-def normal(ind1, ind2, list1, verbose = False):
-    if ind1 < 0:
-        return False
-    if list1[ind1][1].split('_')[0] != list1[ind2][1].split('_')[0]:
-        return False
-    i1 = int(list1[ind1][1].split('.')[0].split('_')[1])
-    i2 = int(list1[ind2][1].split('.')[0].split('_')[1])
-    if (i2-i1) > 60 * (ind2-ind1+1):
-        if verbose: print('{} lost more than one frame to {}'.format(list1[ind1][1], list1[ind2][1]))
-        return False
-    return True
 
 # Little wrapper for mkdir
 def mkdir(*paths):
@@ -62,18 +49,6 @@ def venice(SOURCE_PATH = './venice', EXPORT_PATH = "./datas/venice"):
 
     # Oh btw, roi stands for region of interest
     images, dmaps, roi = {}, {}, {}
-
-    # Before we begin, we build the folder structure
-    # The folder structure looks like
-
-    # root directory
-    #   |
-    #   L images
-    #   L dmaps
-    #   L meta.txt
-    #   L anything else
-
-    mkdir(EXPORT_PATH, EXPORT_PATH + "/" + "images", EXPORT_PATH + "/" + "dmaps")
 
     # Get all the density maps which are mat files (for train and test data)
     # List 1 contains tuples of (path to files, file name)
@@ -104,25 +79,41 @@ def venice(SOURCE_PATH = './venice', EXPORT_PATH = "./datas/venice"):
         
         map = coords_to_density_map(data['annotation'], sigma = 5)
 
-        dmaps[list1[i][1]] = (i, map)
-        roi[list1[i][1]] = (i, data['roi'])
+        # The [:-4] indexing chops away the suffix. I know this counts s hardcoding and generally not a good way to do stuff but oh well
+        dmaps[list1[i][1][:-4]] = (i, map)
+        roi[list1[i][1][:-4]] = (i, data['roi'])
 
     printer.finish()
 
-    print("Loading images")
+    # print("Loading images")
 
     # Also load the image while we are at it
     for i in range(len(list2)): 
         path_to_img = os.path.join(list2[i][0], list2[i][1])
         image = cv2.imread(path_to_img)
-        images[list2[i][1]] = (i, image)
+        images[list2[i][1][:-4]] = (i, image)
     
     # We have decided to factor out the second step
-    make_data(images, roi, dmaps)
+    make_data(images, roi, dmaps, EXPORT_PATH)
 
 # We have decided to factor out the second step since we determined that other datasets might also benefit from these methods
 # The processed images dictionary has values that looks like (image_name, processed image, density map) and keys are integers
 def make_data(images: dict, roi: dict, dmaps: dict, EXPORT_PATH: str):
+    # Before we begin, we build the folder structure
+    # The folder structure looks like
+
+    # root directory
+    #   |
+    #   L images
+    #   L dmaps
+    #   L meta.txt
+    #   L anything else
+
+    # The meta txt is not useful right now so it is not generated for now, but we might generate it in the future
+
+    mkdir(EXPORT_PATH, EXPORT_PATH + "/" + "images", EXPORT_PATH + "/" + "dmaps")
+
+    # Initiate the processed_imgs dictionary, and put all the image names into lis
     processed_imgs = {}
     
     lis = list(images.keys())
@@ -140,17 +131,20 @@ def make_data(images: dict, roi: dict, dmaps: dict, EXPORT_PATH: str):
             print(f"Cannot find corresponding density map or roi of {lis[i]}")
             continue
         
-        print(roi[lis[i]][0], dmaps[lis[i]][0], images[lis[i]][0])
-        
+        # print(roi[lis[i]][0], dmaps[lis[i]][0], images[lis[i]][0])
+        # Get the image and mask it with 
         img = images[lis[i]][1]
 
         for j in range(3):
             img[:, :, j] = img[:, :, j] * img_roi
 
+        # Store it in dictionary
+        # Keys are integers indicating the frame number
+        # values are tuples (image name, image, density map)
         processed_imgs[images[lis[i]][0]] = (lis[i], img, img_dmap)
     
     # Get the highest key number
-    max_key = np.array(processed_imgs.keys(), dtype = int).max()
+    max_key = np.array(list(processed_imgs.keys()), dtype = int).max()
 
     # Loop through dictionary to get processed data
     for i in range(max_key):
@@ -168,13 +162,9 @@ def make_data(images: dict, roi: dict, dmaps: dict, EXPORT_PATH: str):
         np.save(dmap_path, processed_imgs[i][2])
 
         for j in idxs:
-            img_path = path_name + processed_imgs[j][0] + ".jpg"
+            img_path = path_name + "/" + processed_imgs[j][0] + ".jpg"
             cv2.imwrite(img_path, processed_imgs[i][1])
-        
 
-########################################################################################################################
-
-UNITY_SRC = "./unity"
 
 # We need to achieve 3 things
 # Make the densiy maps and put it somewhere in the unity folder
@@ -186,12 +176,10 @@ def process_string():
     pass
 
 def unity():
-    # Get all pngs first
-    list1 = searchFile(UNITY_SRC,'(.*).png')
-    list1.sort()
-
+    pass
 
 
 # Entry point
 if __name__ == "__main__":
-    venice()
+    venice(SOURCE_PATH="./venice/train_data", EXPORT_PATH="./datas/venice_Batch 1")
+    venice(SOURCE_PATH="./venice/test_data", EXPORT_PATH="./datas/venice_Batch 2")
