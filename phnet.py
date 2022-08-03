@@ -2,7 +2,6 @@ import torch.nn as nn
 import torch
 import torchvision.models as models
 from torchvision.models import VGG16_Weights
-import matplotlib.pyplot as plt
 FRAMES_PER_IMG = 3
 
 
@@ -11,17 +10,17 @@ class PHNet(nn.Module):
         super(PHNet, self).__init__()
         self.seen = 0
         self.frame = 3
-        self.CRPool = nn.Conv3d(in_channels=3, out_channels=3, kernel_size=(2, 3, 3), stride=1, padding=(1, 1, 1), bias=False)
         self.conv11 = nn.Conv3d(in_channels=3, out_channels=3, kernel_size=(self.frame + 1,1,1), stride=1)
-        self.frontend_feat = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512]
-        self.frontend_feat2 = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512]
-        self.backend_feat  = [512, 512, 512, 256, 128, 64]
+        self.frontend_feat = [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512]
+        self.frontend_feat2 = [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512]
+        self.backend_feat  = [512, 512, 256, 128, 64]
         self.backend_feat2  = [512, 512, 256, 128]
         self.frontend = make_layers(self.frontend_feat)
         self.frontend2 = make_layers(self.frontend_feat)
         self.backend = make_layers(self.backend_feat, in_channels = 512, dilation = 2)
         self.backend2 = make_layers(self.backend_feat2, in_channels = 512, dilation = 2)
         self.output_layer = nn.Conv2d(192, 1, kernel_size=1)
+        self.CRPool = nn.Conv3d(in_channels=3, out_channels=3, kernel_size=(2, 3, 3), stride=1, padding=(1, 1, 1), bias=False)
         self.relu = nn.ReLU()
         if not load_weights:
             mod = models.vgg16(weights=VGG16_Weights.DEFAULT)
@@ -31,8 +30,6 @@ class PHNet(nn.Module):
                 list(self.frontend2.state_dict().items())[i][1].data[:] = list(mod.state_dict().items())[i][1].data[:]
 
     def forward(self,x):
-        # x and y has shape (2, 3, 3, 720, 1080)
-        # which corresponds to (batch, channel, frames, height, width)
         y = x.clone()
         y = self.CRPool(y)
         y = self.conv11(y*y)

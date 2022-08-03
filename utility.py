@@ -147,6 +147,7 @@ class History:
         # len(X) is really batch size. Makes the fancy progress bar thing
         description = f"loss: {round(train_loss, 5)}, acc: {round(train_acc, 5)} "
         self.printer.print(current_progress, description)
+        print(description)
     
     def validate(self, val_loss, val_acc):
         self.history["val_loss"].append(val_loss)

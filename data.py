@@ -1,5 +1,6 @@
 import random
 import os
+from os.path import isdir
 from PIL import Image
 import numpy as np
 import h5py
@@ -7,110 +8,97 @@ import torch
 from torchvision import transforms
 from torch.utils.data import Dataset
 import torchvision.transforms.functional as F
-from utility import searchFile, hehehaha
 
+# Ok now this can theoretically load any dataset, we just need the root directory of the batch feed in as the root dir
+# The "root" parameter, contrary to the source code, is a list of datasets we want to train on.
+# Each dataset is a folder with 3 things: a folder called "dmaps" containing the density maps, a folder called "images" containing the dataset (each data is a folder containing N images), and a text file "meta.txt" containing the metadata of the datasets
+# Look at "preprocess.py" for the formatting of the metafile
 class listDataset(Dataset):
-    def __init__(self, root, root_dir, shape=None, shuffle=True, transform=None,  train=False, seen=0, direct=False, batch_size=1, num_workers=4, gt_code=1):
-        if train:
-            root = root
-        random.shuffle(root)
-        self.nSamples = len(root)
-        self.lines = root
+    def __init__(self, root, root_dir, shuffle = True, shape=None, transform=None, train=False, seen=0, direct=False, batch_size=1, num_workers=4):
+        # Inherited variables
         self.transform = transform
         self.train = train
         self.shape = shape
         self.seen = seen
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.direct=direct 
-        self.gt_code = gt_code
+        self.direct=direct
+
+        # Self defined variables
         self.root_dir = root_dir
+        self.X, self.y = [], []
+        for dataset in root:
+            self.preload_data(dataset)
 
+        # Shuffle the two arrays simulaneously
+        if shuffle:
+            assert len(self.X) == len(self.y)
+            p = np.random.permutation(len(self.y))
+            self.X, self.y = self.X[p], self.y[p]
+
+    # This overloads the len method
     def __len__(self):
-        return self.nSamples
+        return len(self.X)
     
+    # This overloads the indexing method, which is used by pytorch
     def __getitem__(self, index):
-        assert index <= len(self), 'index range error'         
-        img_path = self.lines[index]
-        img,target = load_data(img_path, self.root_dir, False,code=self.gt_code)
-        img_r = load_data(img_path, self.root_dir, False, direct = True, code=self.gt_code)
-        if self.direct:
-            return img,target,img_r
-        return img,target
+        # Make sure the index isnt too big
+        assert index <= len(self), 'index range error'
+        
+        # Load the data
+        img, target = load(self.X[index], self.y[index], self.direct)
+        return img, target
 
-def load_data(img_path, root_dir, train = True, direct = False, code = 1):
-    transform=transforms.Compose([
-                       transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225]) ])
+    # This helps us preload the paths of all the data so we don't need to do this like 500 times during training
+    def preload_data(self, data_name):
+        img_path = self.root_dir + data_name + "/images"
+        dmap_path = self.root_dir + data_name + "/dmaps"
 
+        # with open(self.root_dir + data_name + "/meta.txt") as f:
+        #     meta = f.readlines()
+
+        # Now get the images
+        for root, dir, filenames in os.walk(img_path):
+            # Append the folder which contains exactly one set of data to the self.X list
+            self.X.append(root)
+            
+            # Now look for the corresponding density map
+            dn = root.split("/")[-1]
+            path_to_corr_dmap = dmap_path + "/" + dn
+            # The suffix is different so we change it now
+            path_to_corr_dmap = path_to_corr_dmap[:-4] + ".npy"
+
+            # Make sure this file exists, otherwise raise an error
+            assert isdir(path_to_corr_dmap), f"Cnnnot find corresponding density map ! File missing: {path_to_corr_dmap}"
+            self.y.append(path_to_corr_dmap)
+
+
+# Direct probably means to leave the data alone, don't touch it
+# So we won't touch it either since I have no idea what it does
+def load(X_path, y_path, direct : bool = False):
+    transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     transform2 = transforms.ToTensor()
 
-    gt_path = img_path.replace('.png','.h5').replace("img1",'target'+code).replace('.jpg','.h5').replace("\\", "/")
-    img_path = img_path.replace("\\", "/")
+    # Do something different for the first data, that we initialize the image variable
+    images = os.listdir(X_path)
+    for i in range(len(images)):
+        image_name = images[i]
+        if (i == 0):
+            img =  np.array(Image.open(X_path + "/" + image_name).convert('RGB'))
+            img = transform(img)
+            image = img.unsqueeze(dim = 1)
+        else:
+            new_img =  np.array(Image.open(X_path + "/" + image_name).convert('RGB'))
+            new_img = transform(new_img)
+            new_image = new_img.unsqueeze(dim = 1)
+            image = torch.cat([image, new_image], axis = 1)
 
-    aug = 0
-
-    for root, dir, filenames in os.walk(img_path):
-        # root, dir, filenames looks like ./venice/ablation3\4896_004260.jpg [] ['4896_004140.jpg', '4896_004200.jpg', '4896_004260.jpg']
+    # Now load the density map
+    dmap = np.load(y_path)
         
-        # Process each files
-        for i in range(len(filenames)):
-            # Process the first image differently
-            if i == 0:
-                img =  np.array(Image.open(img_path + "/" + filenames[i]).convert('RGB'))
-                if direct is True:
-                    return transform2(img)
-                img = transform(img)
-                image = img
-                if aug == 1:
-                    image = img.transpose(Image.FLIP_LEFT_RIGHT)
-                if aug == 2:
-                    crop_size = (int(image.shape[1]/2),int(image.shape[2]/2))
-                    if random.randint(0,9)<= 3:
-                        dx = int(random.randint(0,1)*image.shape[1]*1./2)
-                        dy = int(random.randint(0,1)*image.shape[2]*1./2)
-                    else:
-                        dx = int(random.random()*image.shape[1]*1./2)
-                        dy = int(random.random()*image.shape[2]*1./2)
-                    image = image[:,dx:crop_size[0]+dx,dy:crop_size[1]+dy]
-                if aug == 0:
-                    image = image.unsqueeze(dim = 1)
-            else:
-                new_img =  np.array(Image.open(img_path + "/" + filenames[i]).convert('RGB'))
-                new_img = transform(new_img)
-                new_image = new_img
-                if aug ==1:
-                    new_image = new_image.transpose(Image.FLIP_LEFT_RIGHT)
-                if aug == 2:
-                    new_image = new_image[:,dx:crop_size[0]+dx,dy:crop_size[1]+dy]
-                    new_image = new_image.unsqueeze(dim = 1)
-                if aug == 0:
-                    new_image = new_image.unsqueeze(dim = 1)
-                image = torch.cat([image, new_image], axis = 1)
-
-
-    # Loads the target (density map files) - first try to load directly from path but also try a search
-    try:
-        gt_file = h5py.File(gt_path)
-    except:
-        img_name = gt_path.split("/")[-1]
-        candidates = searchFile(root_dir + "venice", img_name)
-        if len(candidates) != 1:
-            raise AssertionError(f"Found incorrect number of files! Files with name {img_name} found at root path {root_dir}/venice: {len(candidates)}")
-        # print("HEHEHAHA")
-        # print(*candidates)
-        gt_file = h5py.File(candidates[0][0] + "/" + candidates[0][1])
-    
-    target = np.asarray(gt_file['density'])
-    if aug == 1:
-        target = np.fliplr(target)
-    if aug == 2:
-        target = target[dx:crop_size[0]+dx,dy:crop_size[1]+dy]
-        
-    # Note: Using PIL instead of OpenCV produces an average pixel difference of about 0.002. Insignificant sure but also something noteworthy
-    t = Image.fromarray(target)
+    # Note: Using PIL instead of OpenCV as in the original code produces an average pixel difference of about 0.002. Insignificant sure but also something noteworthy
+    t = Image.fromarray(dmap)
     size = (int(np.floor(image.shape[3]/8)), int(np.floor(image.shape[2]/8)))
-    t = t.resize(size, Image.BICUBIC)
-    t = np.array(t, dtype = target.dtype) * 64
+    t = np.array(t.resize(size, Image.BICUBIC), dtype = dmap.dtype) * 64
 
     return image, t

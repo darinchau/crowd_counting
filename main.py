@@ -37,25 +37,15 @@ def main(args):
     args.workers        = 4
     args.logname        = "logs.txt"
 
-    print(args.progress_bar, args.debug)
+    # print(args.progress_bar, args.debug)
 
+    # We need a user dir variable in case we want to put the dataset somewhere other than the same directory as the py file
+    # I am talking about you TACC, you are hard to work with :(
     root = args.user_dir
 
-    # Load list of file for list of files to train and test
-    with open(root + args.train_json, 'r') as outfile:
-        train_list = json.load(outfile)
-
-    with open(root + args.test_json, 'r') as outfile:
-        val_list = json.load(outfile)
-
     # Flush log file
-    with open(root + "" + args.logname, "w") as f:
+    with open(root + args.logname, "w") as f:
         pass
-    
-    tl = [root + dir[2:] for dir in train_list]
-    vl = [root + dir[2:] for dir in val_list]
-
-    train_list, val_list = tl, vl
     
     # Set up gpu if available
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -70,31 +60,33 @@ def main(args):
     # Sets up parallel computing
     model = DataParallel_withLoss(model, criterion)
 
+    # Get the training list and validation list
+    # In the train (val) list files, each dataset name is separated by \n
+    with open(root + "train.txt") as f:
+        train_list = f.readlines().split("\n")
+
+    with open(root + "val.txt") as f:
+        val_list = f.readlines().split("\n")
+
     # Loads training data
-    train_dataloader = torch.utils.data.DataLoader(
-        dataset.listDataset(train_list,
-                       shuffle = True,
-                       root_dir = root,
-                       transform = transforms.Compose([
-                       transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225]),
-                   ]),
-                       train = True,
-                       gt_code = args.gt_code,
-                       batch_size = args.batch_size,
-                       num_workers = args.workers),
+    train_dataloader = torch.utils.data.DataLoader(dataset.listDataset(
+        train_list,
+        shuffle = True,
+        root_dir = root,
+        transform = transforms.Compose([
+        transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])]),
+        train = True,
+        batch_size = args.batch_size,
+        num_workers = args.workers),
         batch_size = args.batch_size)
 
-    test_dataloader = torch.utils.data.DataLoader(
-        dataset.listDataset(val_list,
-                    shuffle=False,
-                    root_dir = root,
-                    gt_code = args.gt_code,
-                    transform=transforms.Compose([
-                        transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                        std=[0.229, 0.224, 0.225]),
-                    ])
-                        ,train=False),
+    # Loads validation data
+    test_dataloader = torch.utils.data.DataLoader(dataset.listDataset(
+        val_list,
+        shuffle=False,
+        root_dir = root,
+        transform=transforms.Compose([transforms.ToTensor(),transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])]),
+        train=False),
         batch_size = args.batch_size)
     
     # Sets up training history
@@ -145,14 +137,20 @@ def train(dataloader, model, optimizer, history, batch_size, test_mode = False):
             # Fwprop
             loss, output = model(y, X)
 
-            # Backprop
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            try:
+                # Backprop
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                loss = loss.item()
+            except:
+                # Backprop
+                optimizer.zero_grad()
+                loss.mean().backward()
+                optimizer.step()
 
             mae = GAME(output.data, y, 0) / batch_size
-
-            loss, mae = loss.item(), mae.item()
+            mae = mae.item()
 
         # Update the result
         history.increment(batch * len(X), loss, mae)
@@ -257,10 +255,9 @@ if __name__ == "__main__":
     # python model/train.py /dataset/Venice/train_data.json /dataset/Venice/test_data.json
     # Environment variables
     parser = argparse.ArgumentParser(description='UROP 1100')
-    parser.add_argument('--train_json', metavar='TRAIN', help='path to train json', default="jsons/train3.json")
-    parser.add_argument('--test_json', metavar='TEST', help='path to test json', default="jsons/test3.json")
     parser.add_argument('--pre', '-p', metavar='PRETRAINED', default=None,type=str, help='path to the pretrained model')
     parser.add_argument('--batch_size', '-bs', metavar='BATCHSIZE' ,type=int, help='batch size', default=2)
+    parser.add_argument('--data_name', '-bs', metavar='DATANAME' ,type=int, help='name of dataset folder', default="venice")
     parser.add_argument('--gpu',metavar='GPU', type=str, help='GPU id to use.', default="5")
     parser.add_argument('--task',metavar='TASK', type=str, help='task id to use.', default="1")
     parser.add_argument('--gt_code', metavar='GT_NUMBER' ,type=str, help='ground truth dataset number', default='4896')
