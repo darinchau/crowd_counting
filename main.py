@@ -1,24 +1,23 @@
-import os
+from PIL import Image
 from phnet import PHNet
+from torch.utils.data import Dataset
+from torchvision import transforms
+from utility import History, save_checkpoint
+from utility import searchFile
+import argparse
+import data as dataset
+import h5py
+import json
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+import random
+import time
 import torch
 import torch.nn as nn
-from torchvision import transforms
-import argparse
-import json
-import data as dataset
-import time
-from utility import History, save_checkpoint
-import random
-from PIL import Image
-import numpy as np
-import h5py
-from torch.utils.data import Dataset
 import torchvision.transforms.functional as F
-from utility import searchFile
 
 # Args namespace holds all variables about the training
-
-
 def main(args):
     global device, root
 
@@ -62,11 +61,11 @@ def main(args):
 
     # Get the training list and validation list
     # In the train (val) list files, each dataset name is separated by \n
-    with open(root + "train.txt") as f:
-        train_list = f.readlines().split("\n")
+    with open("./train.txt") as f:
+        train_list = f.readlines()
 
-    with open(root + "val.txt") as f:
-        val_list = f.readlines().split("\n")
+    with open("./test.txt") as f:
+        val_list = f.readlines()
 
     # Loads training data
     train_dataloader = torch.utils.data.DataLoader(dataset.listDataset(
@@ -121,13 +120,27 @@ def main(args):
 def train(dataloader, model, optimizer, history, batch_size, test_mode = False):
     history.new_epoch()    
     model.train()
+
+    # Plot the loaded images if it is debug mode
+    
+    # Loop through all the datas
+    # batch is an integer which is like the batch index
+    # X is the 3d dataset thing and y is the density map
     for batch, (X, y) in enumerate(dataloader):
         loss = mae = 0
         
         if test_mode:
-            time.sleep(1e-9)
             print(X.shape, y.shape)
+            with torch.no_grad():
+                a = X[0,:,1,:,:].numpy()
+                a = a.transpose(1, 2, 0)
+                plt.figure()
+                plt.imshow(a)
+                plt.show()
 
+                plt.figure()
+                plt.imshow(y[0, :, :])
+                plt.show()
         else:
             # Prepares the data: move to cuda if available
             X, y = X.to(device), y.to(device)
@@ -187,7 +200,6 @@ def GAME(img, target, level = 1):
 # Try to load a pretrained model in "p". Returns the model if something is found, otherwise return none
 def Load_Checkpoint(p, history, model, optimizer):
     if p:
-        ## TODO remember to change checkpoint structure
         if os.path.isfile(p):
             print("=> loading checkpoint '{}'".format(p))
             checkpoint = torch.load(p)
@@ -251,16 +263,16 @@ def adjust_learning_rate(optimizer, epoch):
         param_group['lr'] = args.lr
 
 
+
+# Entry point
 if __name__ == "__main__":
     # python model/train.py /dataset/Venice/train_data.json /dataset/Venice/test_data.json
     # Environment variables
     parser = argparse.ArgumentParser(description='UROP 1100')
     parser.add_argument('--pre', '-p', metavar='PRETRAINED', default=None,type=str, help='path to the pretrained model')
     parser.add_argument('--batch_size', '-bs', metavar='BATCHSIZE' ,type=int, help='batch size', default=2)
-    parser.add_argument('--data_name', '-bs', metavar='DATANAME' ,type=int, help='name of dataset folder', default="venice")
     parser.add_argument('--gpu',metavar='GPU', type=str, help='GPU id to use.', default="5")
     parser.add_argument('--task',metavar='TASK', type=str, help='task id to use.', default="1")
-    parser.add_argument('--gt_code', metavar='GT_NUMBER' ,type=str, help='ground truth dataset number', default='4896')
     parser.add_argument('--progress_bar', metavar='PBAR' ,type=bool, help='Whether to use progress bar or not', default=False)
     parser.add_argument('--debug', metavar='PBAR' ,type=bool, help='Whether to actually pass the model through the data or not', default=False)
     parser.add_argument('--user_dir', metavar="USERDIR", type=str, default="./")

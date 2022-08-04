@@ -11,9 +11,9 @@ class PHNet(nn.Module):
         self.seen = 0
         self.frame = 3
         self.conv11 = nn.Conv3d(in_channels=3, out_channels=3, kernel_size=(self.frame + 1,1,1), stride=1)
-        self.frontend_feat = [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512]
-        self.frontend_feat2 = [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512]
-        self.backend_feat  = [512, 512, 256, 128, 64]
+        self.frontend_feat = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512]
+        self.frontend_feat2 = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512]
+        self.backend_feat  = [512, 512, 512, 256, 128, 64]
         self.backend_feat2  = [512, 512, 256, 128]
         self.frontend = make_layers(self.frontend_feat)
         self.frontend2 = make_layers(self.frontend_feat)

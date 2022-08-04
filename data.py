@@ -1,6 +1,6 @@
 import random
 import os
-from os.path import isdir
+import os.path as path
 from PIL import Image
 import numpy as np
 import h5py
@@ -30,11 +30,18 @@ class listDataset(Dataset):
         for dataset in root:
             self.preload_data(dataset)
 
+        # print(len(self.X))
+        # print(len(self.y))
+        # print(self.X[:2])
+        # print(self.y[:2])
+
         # Shuffle the two arrays simulaneously
         if shuffle:
+            # Raise an assertion error if the lists are not the same length, otherwise the shuffling will most probably go wrong
             assert len(self.X) == len(self.y)
-            p = np.random.permutation(len(self.y))
-            self.X, self.y = self.X[p], self.y[p]
+            c = list(zip(self.X, self.y))
+            random.shuffle(c)
+            self.X, self.y = zip(*c)
 
     # This overloads the len method
     def __len__(self):
@@ -51,25 +58,24 @@ class listDataset(Dataset):
 
     # This helps us preload the paths of all the data so we don't need to do this like 500 times during training
     def preload_data(self, data_name):
-        img_path = self.root_dir + data_name + "/images"
-        dmap_path = self.root_dir + data_name + "/dmaps"
+        img_path = self.root_dir + "datas" + "/" + data_name + "/images"
+        dmap_path = self.root_dir + "datas" + "/" + data_name + "/dmaps"
 
         # with open(self.root_dir + data_name + "/meta.txt") as f:
         #     meta = f.readlines()
 
         # Now get the images
-        for root, dir, filenames in os.walk(img_path):
+        for dir in os.listdir(img_path):
+            # the dir is really the subfolders/files inside the folder img_path
             # Append the folder which contains exactly one set of data to the self.X list
-            self.X.append(root)
+            path_to_data = img_path + "/" + dir
+            self.X.append(path_to_data)
             
-            # Now look for the corresponding density map
-            dn = root.split("/")[-1]
-            path_to_corr_dmap = dmap_path + "/" + dn
-            # The suffix is different so we change it now
-            path_to_corr_dmap = path_to_corr_dmap[:-4] + ".npy"
+            # Now look for the corresponding density map. Also add in the suffix here
+            path_to_corr_dmap = dmap_path + "/" + dir + ".npy"
 
             # Make sure this file exists, otherwise raise an error
-            assert isdir(path_to_corr_dmap), f"Cnnnot find corresponding density map ! File missing: {path_to_corr_dmap}"
+            assert path.isfile(path_to_corr_dmap), f"Cannot find corresponding density map ! File missing: {path_to_corr_dmap}"
             self.y.append(path_to_corr_dmap)
 
 
@@ -95,9 +101,10 @@ def load(X_path, y_path, direct : bool = False):
 
     # Now load the density map
     dmap = np.load(y_path)
-        
+
     # Note: Using PIL instead of OpenCV as in the original code produces an average pixel difference of about 0.002. Insignificant sure but also something noteworthy
     t = Image.fromarray(dmap)
+    
     size = (int(np.floor(image.shape[3]/8)), int(np.floor(image.shape[2]/8)))
     t = np.array(t.resize(size, Image.BICUBIC), dtype = dmap.dtype) * 64
 

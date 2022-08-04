@@ -1,15 +1,15 @@
-import os
-import mat4py
+from scipy import ndimage
+from utility import Printer, searchFile
+import cv2
 import h5py
+import json
+import mat4py
 import numpy as np
+import os
+import re
 import scipy
 import scipy.spatial as ss
-from scipy import ndimage
-import re
 import shutil
-import cv2
-import json
-from utility import Printer, searchFile
 
 # number of images per set of data. must be odd number (actually even number should be ok too)
 IMAGE_NUM = 3
@@ -154,7 +154,7 @@ def make_data(images: dict, roi: dict, dmaps: dict, EXPORT_PATH: str):
         if not can_3d:
             continue
 
-        path_name = EXPORT_PATH + "/" + "images" + "/" + "data" + str(i)
+        path_name = EXPORT_PATH + "/" + "images" + "/" + processed_imgs[i][0]
         mkdir(path_name)
 
         # Save the density map first since that seems to be a bit easier
@@ -181,5 +181,6 @@ def unity():
 
 # Entry point
 if __name__ == "__main__":
-    venice(SOURCE_PATH="./venice/train_data", EXPORT_PATH="./datas/venice_Batch 1")
-    venice(SOURCE_PATH="./venice/test_data", EXPORT_PATH="./datas/venice_Batch 2")
+    venice(SOURCE_PATH="./fakevenice", EXPORT_PATH="./datas/fakevenice")
+    # venice(SOURCE_PATH="./venice/train_data", EXPORT_PATH="./datas/Venice Batch 1")
+    # venice(SOURCE_PATH="./venice/test_data", EXPORT_PATH="./datas/Venice Batch 2")
