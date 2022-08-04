@@ -198,8 +198,9 @@ def GAME(img, target, level = 1):
     return game
 
 # Try to load a pretrained model in "p". Returns the model if something is found, otherwise return none
-def Load_Checkpoint(p, history, model, optimizer):
-    if p:
+def Load_Checkpoint(pre, history, model, optimizer):
+    if pre:
+        p = root + pre
         if os.path.isfile(p):
             print("=> loading checkpoint '{}'".format(p))
             checkpoint = torch.load(p)
@@ -271,7 +272,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='UROP 1100')
     parser.add_argument('--pre', '-p', metavar='PRETRAINED', default=None,type=str, help='path to the pretrained model')
     parser.add_argument('--batch_size', '-bs', metavar='BATCHSIZE' ,type=int, help='batch size', default=2)
-    parser.add_argument('--gpu',metavar='GPU', type=str, help='GPU id to use.', default="5")
     parser.add_argument('--task',metavar='TASK', type=str, help='task id to use.', default="1")
     parser.add_argument('--progress_bar', metavar='PBAR' ,type=bool, help='Whether to use progress bar or not', default=False)
     parser.add_argument('--debug', metavar='PBAR' ,type=bool, help='Whether to actually pass the model through the data or not', default=False)
