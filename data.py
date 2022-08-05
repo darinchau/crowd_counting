@@ -65,14 +65,17 @@ class listDataset(Dataset):
         #     meta = f.readlines()
 
         # Now get the images
-        for dir in os.listdir(img_path):
+        if not os.path.isdir(img_path) or not os.path.isdir(dmap_path):
+            return
+        
+        for dir_ in os.listdir(img_path):
             # the dir is really the subfolders/files inside the folder img_path
             # Append the folder which contains exactly one set of data to the self.X list
-            path_to_data = img_path + "/" + dir
+            path_to_data = img_path + "/" + dir_
             self.X.append(path_to_data)
             
             # Now look for the corresponding density map. Also add in the suffix here
-            path_to_corr_dmap = dmap_path + "/" + dir + ".npy"
+            path_to_corr_dmap = dmap_path + "/" + dir_ + ".npy"
 
             # Make sure this file exists, otherwise raise an error
             assert path.isfile(path_to_corr_dmap), f"Cannot find corresponding density map ! File missing: {path_to_corr_dmap}"

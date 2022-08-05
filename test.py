@@ -3,7 +3,7 @@ import random
 import time
 from scipy.io import loadmat
 from utility import searchFile
-from preprocess import SOURCE_PATH
+from preprocess import process_unity_data
 import mat4py
 import os
 import h5py
@@ -11,6 +11,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import ndimage
 import cv2
+
+SOURCE_PATH = "depreceated :)"
 
 def test1():
     """Test progress bar"""
@@ -109,6 +111,15 @@ def test4():
             data = h5py.File(os.path.join(list1[data_idx][0],list1[data_idx][1]), 'r')
         ann = data['annotation']
         print(len(ann))
+
+# Test the process unity dataset
+def test5():
+    with open(SOURCE_PATH + "/" + "data.txt") as f:
+        data = f.read()
+
+    data_lis = process_unity_data(data)
+
+    print(len(data_lis))
 
 if __name__ == "__main__":
     test4()

@@ -167,6 +167,53 @@ def make_data(images: dict, roi: dict, dmaps: dict, EXPORT_PATH: str):
             cv2.imwrite(img_path, processed_imgs[i][1])
 
 
+# This processes the unity dataset data.txt. Upon feeding the original string into this function it will return a dictionary of
+# N keys, where N is the number of frames in the dataset (should be 300?). The frame number would be the keys and the values are tuple in the
+# format: (K = number of people, frame rate ( = 1/time between last frame and this frame ), frame data)
+
+# and then frame data is another list of length K, and each element is a tuple in the format:
+# (x coord, y coord, id to keep track which people is which, bounding box (bb) left, bb top, bb right, bb bottom)
+
+# Feel free to copy and paste this :) unless you want to do string manipulation yourself :)))))
+
+def process_unity_data(data: str):
+    # Split all the data into frames first. The "frameend" is here exactly for this purpose. Discard anything after the last frameend, typically white space
+    frs = data.split("frameend")[:-1]
+    # Initialize empty dict to populate
+    data_dict = {}
+
+    # Loop through every frame
+    for fr in frs:
+        # Declare necessary variables
+        frame_idx, num_people, frame_rate = 0, 0, 0
+        frame_data_lis = []
+
+        # Split rows first
+        frdata = fr.split("\n")
+        for f in frdata:
+            # If f begins with "Frame " then extract the frame number
+            if f[:6] == "Frame ":
+                frame_idx = int(f.split("Frame ")[1].split(":")[0])
+                continue
+
+            if f[:12] == "Frame rate: ":
+                frame_rate = float(f.split("Frame rate: ")[1])
+                continue
+
+            if f[:13] == "Total count: ":
+                num_people = int(f.split("Total count: "[1]))
+                continue
+            
+            # Frame data done in one line :))))))
+            # We split each row at ":", then for each data we split again at "  ", then what's in between them would be the values we want
+            # We put these values in an int constructor, and then put the whole loop in list comprehension, and cast it to a tuple
+            t = tuple([int(f.split(":")[k].split("  ")[0]) for k in range(1,8)])
+            frame_data_lis.append(t)
+        
+        data_dict[frame_idx] = (num_people, frame_rate, frame_data_lis)
+    
+    return data_dict
+
 
 # This processes the unity dataset. A bunch of string manipulations coming up so hold on tight :)
 # Forgive me I have no idea how to export numpy arrays or h5s or whatevers from C#
@@ -175,6 +222,8 @@ def unity(SOURCE_PATH, EXPORT_PATH):
     data = ""
     with open(SOURCE_PATH + "/" + "data.txt") as f:
         data = f.read()
+
+    data_dict = process_unity_data(data)
     
     # Now perform string manipulation magic. Our goal is same as the venice processing above:
     # which is to create the images, dmap files, and roi dictionaries
@@ -224,24 +273,13 @@ def unity(SOURCE_PATH, EXPORT_PATH):
         # This will serve as the key of our dictionaries
         img_name = dir[:-4]
 
-        # String manipulation tim. First initiate an empty list
-        c = []
-        # Assuming no duplicate image names. Split at the row with the frame data name
-        if i == len(dirs) - 1:
-            framedata = data.split(img_name)[1]
-        else:
-            framedata = data.split(img_name)[1].split("frameend")[0]
-        
-        # print(framedata)
-        # Split every row and discard the first entry since it is a ":" from the firsts row
-        coords = framedata.split("\n\t")
-        # Loop through every coordinate
-        for coord in coords[1:]:
-            # print(coord)
-            xy = coord.split("y:")
-            x = int(xy[0][2:-2])
-            y = (int(xy[1]))
-            c.append([x,y])
+        # Get the frame number as appeared on the image name
+        frame_idx = int(img_name.split("Frame ")[1])
+
+        # Get the ith frame data, -1 means the last index which returns the frame data (refer to above) of that frame
+        frame_i_data = data_dict[frame_idx][-1]
+
+        c = [(frame_i_data[k][0], frame_i_data[k][1]) for k in range(len(frame_i_data))]
         
         # Turn this into a numpy array to make the density map
         c = np.array(c, dtype = int)

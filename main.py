@@ -8,7 +8,6 @@ import argparse
 import data as dataset
 import h5py
 import json
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import random
@@ -130,6 +129,7 @@ def train(dataloader, model, optimizer, history, batch_size, test_mode = False):
         loss = mae = 0
         
         if test_mode:
+            import matplotlib.pyplot as plt
             print(X.shape, y.shape)
             with torch.no_grad():
                 a = X[0,:,1,:,:].numpy()
