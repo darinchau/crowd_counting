@@ -1,4 +1,5 @@
 from scipy import ndimage
+from unitysrc import process_unity_data
 from utility import Printer, searchFile
 import cv2
 import h5py
@@ -20,8 +21,8 @@ IMAGE_NUM = 3
 # First the function creates an image and makes a "one-hot" encoding of the person in the pt2d image
 # sigma = 5: Then the function performs Gaussian filtering for each one-hot encoded person
 # Gaussian filter is a type of blurrnig with the Gaussian Normal distribution function, where we can get predictable kernels
-def coords_to_density_map(coords, sigma=5):
-    sha = (720, 1280)
+# sha is the image dimensions
+def coords_to_density_map(coords, sigma=5, sha=(720, 1280)):
     density = np.zeros(sha, dtype=np.float32)
     for i in range(len(coords)):
         pt2d = np.zeros(sha, dtype=np.float32)
@@ -167,52 +168,10 @@ def make_data(images: dict, roi: dict, dmaps: dict, EXPORT_PATH: str):
             cv2.imwrite(img_path, processed_imgs[i][1])
 
 
-# This processes the unity dataset data.txt. Upon feeding the original string into this function it will return a dictionary of
-# N keys, where N is the number of frames in the dataset (should be 300?). The frame number would be the keys and the values are tuple in the
-# format: (K = number of people, frame rate ( = 1/time between last frame and this frame ), frame data)
-
-# and then frame data is another list of length K, and each element is a tuple in the format:
-# (x coord, y coord, id to keep track which people is which, bounding box (bb) left, bb top, bb right, bb bottom)
-
-# Feel free to copy and paste this :) unless you want to do string manipulation yourself :)))))
-
-def process_unity_data(data: str):
-    # Split all the data into frames first. The "frameend" is here exactly for this purpose. Discard anything after the last frameend, typically white space
-    frs = data.split("frameend")[:-1]
-    # Initialize empty dict to populate
-    data_dict = {}
-
-    # Loop through every frame
-    for fr in frs:
-        # Declare necessary variables
-        frame_idx, num_people, frame_rate = 0, 0, 0
-        frame_data_lis = []
-
-        # Split rows first
-        frdata = fr.split("\n")
-        for f in frdata:
-            # If f begins with "Frame " then extract the frame number
-            if f[:6] == "Frame ":
-                frame_idx = int(f.split("Frame ")[1].split(":")[0])
-                continue
-
-            if f[:12] == "Frame rate: ":
-                frame_rate = float(f.split("Frame rate: ")[1])
-                continue
-
-            if f[:13] == "Total count: ":
-                num_people = int(f.split("Total count: "[1]))
-                continue
-            
-            # Frame data done in one line :))))))
-            # We split each row at ":", then for each data we split again at "  ", then what's in between them would be the values we want
-            # We put these values in an int constructor, and then put the whole loop in list comprehension, and cast it to a tuple
-            t = tuple([int(f.split(":")[k].split("  ")[0]) for k in range(1,8)])
-            frame_data_lis.append(t)
-        
-        data_dict[frame_idx] = (num_people, frame_rate, frame_data_lis)
-    
-    return data_dict
+# I think the most fascinating thing about the cv2 resize is it can handle 2 dimensional arrays
+def try_resize(img, size = (720, 1280)):
+    if img.shape[:-1] != size:
+        img = cv2.resize(img, size, interpolation = cv2.INTER_CUBIC)
 
 
 # This processes the unity dataset. A bunch of string manipulations coming up so hold on tight :)
@@ -235,6 +194,7 @@ def unity(SOURCE_PATH, EXPORT_PATH):
     bnw_roi = roi_na[:,:,0]
     bnw_roi[bnw_roi > 0] = 1
     roi_img = np.array(bnw_roi, dtype = np.uint8)
+    roi_img = try_resize(roi_img)
 
     # We read all the images first
     dirs = os.listdir(SOURCE_PATH)
@@ -279,11 +239,15 @@ def unity(SOURCE_PATH, EXPORT_PATH):
         # Get the ith frame data, -1 means the last index which returns the frame data (refer to above) of that frame
         frame_i_data = data_dict[frame_idx][-1]
 
+        # Extact the coordinate info
         c = [(frame_i_data[k][0], frame_i_data[k][1]) for k in range(len(frame_i_data))]
         
         # Turn this into a numpy array to make the density map
         c = np.array(c, dtype = int)
-        dmap = coords_to_density_map(c, sigma = 5)
+        dmap = coords_to_density_map(c, sigma = 5, sha = img.shape[:-1])
+        
+        dmap = try_resize(dmap)
+        img = try_resize(img)
 
         # Same format as above: keys = image name, values = tuple(frame index, image/roi/dmap)
         images[img_name] = (i, img)
@@ -297,11 +261,6 @@ def unity(SOURCE_PATH, EXPORT_PATH):
 
 
 # Entry point
-# You will find some of the codes used previously here
 # Test your code first cuz making density maps takes foreve
 if __name__ == "__main__":
-    # venice(SOURCE_PATH="./fakevenice", EXPORT_PATH="./datas/fakevenice")
-    # venice(SOURCE_PATH="./venice/train_data", EXPORT_PATH="./datas/Venice Batch 1")
-    # venice(SOURCE_PATH="./venice/test_data", EXPORT_PATH="./datas/Venice Batch 2")
-    unity(SOURCE_PATH="./unity/Set 1", EXPORT_PATH="./datas/Unity Batch 1")
-    # unity(SOURCE_PATH="./unity/fakeset", EXPORT_PATH="./datas/Unity test Batch")
+    unity(SOURCE_PATH="./unity/Set 0", EXPORT_PATH="./datas/Unity Batch 0")
