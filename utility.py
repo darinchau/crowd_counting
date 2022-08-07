@@ -67,7 +67,7 @@ class Printer:
 
 class Timer:
     @staticmethod
-    def __init__(self, f, *args, **kwargs):
+    def __init__(f, *args, **kwargs):
         t1 = time.time()
         out = f(*args, **kwargs)
         t2 = time.time()

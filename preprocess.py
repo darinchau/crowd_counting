@@ -1,4 +1,6 @@
+from alive_progress import alive_bar
 from scipy import ndimage
+from multiprocessing import Process, Queue
 from unitysrc import process_unity_data
 from utility import Printer, searchFile
 import cv2
@@ -39,64 +41,24 @@ def mkdir(*paths):
         if not os.path.isdir(path):
             os.makedirs(path)
 
-#########################################################
-########### This processes the venice dataset ###########
-#########################################################
-def venice(SOURCE_PATH = './venice', EXPORT_PATH = "./datas/venice"):
-    # This following code makes the density maps
-    # First initialize the roi and density map files
-    # Later in the dictionary we don't actually put the data itself, but we put a tuple (i, data), where i is the index of the file
-    # For example, Frame 1 should have index 0, and Frame 42069 should have i = 42068
-    # This helps us retrieve the data a bit more easily later
+# I think the most fascinating thing about the cv2 resize is it can handle 2 dimensional arrays
+def try_resize(img, size = (720, 1280)):
+    img = cv2.resize(img, size, interpolation = cv2.INTER_CUBIC)
+    return img
 
-    # Oh btw, roi stands for region of interest
-    images, dmaps, roi = {}, {}, {}
+# A decorator for adding progress bars to your data processing functions
+def addprogressbar(f):
+    def inner(SOURCE_PATH, EXPORT_PATH):
+        with alive_bar(0) as bar:
+            for i in f(SOURCE_PATH, EXPORT_PATH):
+                bar()
+    return inner
 
-    # Get all the density maps which are mat files (for train and test data)
-    # List 1 contains tuples of (path to files, file name)
-    list1 = searchFile(SOURCE_PATH,'(.*).mat')
-    list1.sort()
-
-    list2 = searchFile(SOURCE_PATH,'(.*).jpg')
-    list2.sort()
-
-    # Print the progress bar just to make everything fancy
-    # Actually this is horrible naming, but in my defence I originally intend it to be called PRINT Events Remaining
-    # It just developed from a simple counter with a class wrapper into a progress bar
-    printer = Printer(len(list1), "Processing")
-
-    # For each entry in list1:
-    #   Load the data
-    #   Perform Gaussian filtering on image using the magic function
-    #   save the images, roi, and density map in their corresponding dictionaries
-    for i in range(len(list1)):   
-        # Increment progress bar
-        printer.print(i)
-
-        # Load the data (in two dfferent ways)
-        try:
-            data = mat4py.loadmat(os.path.join(list1[i][0], list1[i][1]))
-        except:
-            data = h5py.File(os.path.join(list1[i][0],list1[i][1]), 'r')
-        
-        map = coords_to_density_map(data['annotation'], sigma = 5)
-
-        # The [:-4] indexing chops away the suffix. I know this counts s hardcoding and generally not a good way to do stuff but oh well
-        dmaps[list1[i][1][:-4]] = (i, map)
-        roi[list1[i][1][:-4]] = (i, data['roi'])
-
-    printer.finish()
-
-    # print("Loading images")
-
-    # Also load the image while we are at it
-    for i in range(len(list2)): 
-        path_to_img = os.path.join(list2[i][0], list2[i][1])
-        image = cv2.imread(path_to_img)
-        images[list2[i][1][:-4]] = (i, image)
-    
-    # We have decided to factor out the second step
-    make_data(images, roi, dmaps, EXPORT_PATH)
+# We also factor out the method to make one density map so we can perform multiprocessing
+def make_dmap_parallel(q : Queue, img_name, i, img, coordinates):
+    dmap = coords_to_density_map(coordinates, sigma = 5, sha = img.shape[:-1])
+    dmap = try_resize(dmap)
+    q.put((img_name, i, dmap))
 
 # We have decided to factor out the second step since we determined that other datasets might also benefit from these methods
 # The processed images dictionary has values that looks like (image_name, processed image, density map) and keys are integers
@@ -167,15 +129,71 @@ def make_data(images: dict, roi: dict, dmaps: dict, EXPORT_PATH: str):
             img_path = path_name + "/" + processed_imgs[j][0] + ".jpg"
             cv2.imwrite(img_path, processed_imgs[i][1])
 
+#########################################################
+########### This processes the venice dataset ###########
+#########################################################
+def venice(SOURCE_PATH = './venice', EXPORT_PATH = "./datas/venice"):
+    # This following code makes the density maps
+    # First initialize the roi and density map files
+    # Later in the dictionary we don't actually put the data itself, but we put a tuple (i, data), where i is the index of the file
+    # For example, Frame 1 should have index 0, and Frame 42069 should have i = 42068
+    # This helps us retrieve the data a bit more easily later
 
-# I think the most fascinating thing about the cv2 resize is it can handle 2 dimensional arrays
-def try_resize(img, size = (720, 1280)):
-    if img.shape[:-1] != size:
-        img = cv2.resize(img, size, interpolation = cv2.INTER_CUBIC)
+    # Oh btw, roi stands for region of interest
+    images, dmaps, roi = {}, {}, {}
 
+    # Get all the density maps which are mat files (for train and test data)
+    # List 1 contains tuples of (path to files, file name)
+    list1 = searchFile(SOURCE_PATH,'(.*).mat')
+    list1.sort()
 
-# This processes the unity dataset. A bunch of string manipulations coming up so hold on tight :)
-# Forgive me I have no idea how to export numpy arrays or h5s or whatevers from C#
+    list2 = searchFile(SOURCE_PATH,'(.*).jpg')
+    list2.sort()
+
+    # Print the progress bar just to make everything fancy
+    # Actually this is horrible naming, but in my defence I originally intend it to be called PRINT Events Remaining
+    # It just developed from a simple counter with a class wrapper into a progress bar
+    printer = Printer(len(list1), "Processing")
+
+    # For each entry in list1:
+    #   Load the data
+    #   Perform Gaussian filtering on image using the magic function
+    #   save the images, roi, and density map in their corresponding dictionaries
+    for i in range(len(list1)):   
+        # Increment progress bar
+        printer.print(i)
+
+        # Load the data (in two dfferent ways)
+        try:
+            data = mat4py.loadmat(os.path.join(list1[i][0], list1[i][1]))
+        except:
+            data = h5py.File(os.path.join(list1[i][0],list1[i][1]), 'r')
+        
+        map = coords_to_density_map(data['annotation'], sigma = 5)
+
+        # The [:-4] indexing chops away the suffix. I know this counts s hardcoding and generally not a good way to do stuff but oh well
+        dmaps[list1[i][1][:-4]] = (i, map)
+        roi[list1[i][1][:-4]] = (i, data['roi'])
+
+    printer.finish()
+
+    # print("Loading images")
+
+    # Also load the image while we are at it
+    for i in range(len(list2)): 
+        path_to_img = os.path.join(list2[i][0], list2[i][1])
+        image = cv2.imread(path_to_img)
+        images[list2[i][1][:-4]] = (i, image)
+    
+    # We have decided to factor out the second step
+    make_data(images, roi, dmaps, EXPORT_PATH)
+
+# We wrote another function since my computer is not sufficient to handle the big stuff
+# So there would be fancy schmancy stuff like multiprocessing etc
+########################################################
+########### This processes the unity dataset ###########
+########################################################
+@addprogressbar
 def unity(SOURCE_PATH, EXPORT_PATH):
     # First read the data file
     data = ""
@@ -183,25 +201,24 @@ def unity(SOURCE_PATH, EXPORT_PATH):
         data = f.read()
 
     data_dict = process_unity_data(data)
-    
-    # Now perform string manipulation magic. Our goal is same as the venice processing above:
-    # which is to create the images, dmap files, and roi dictionaries
-    # because then we can offload our work to the make_file function
-    images, dmaps, roi = {}, {}, {}
 
-    # Preload the roi since it is the same for every image
-    roi_na = cv2.imread(SOURCE_PATH + "/" + "roi.png")
-    bnw_roi = roi_na[:,:,0]
-    bnw_roi[bnw_roi > 0] = 1
-    roi_img = np.array(bnw_roi, dtype = np.uint8)
-    roi_img = try_resize(roi_img)
-
-    # We read all the images first
+    # We read all the paths of images
     dirs = os.listdir(SOURCE_PATH)
     dirs.sort()
-    p = Printer(len(dirs), "Processing unity")
+    
+    # dmaps will be done via multiprocessing
+    images, roi = {}, {}
+
+    # Preload the roi since it is the same for every image
+    bnw_roi = cv2.imread(SOURCE_PATH + "/" + "roi.png")[:,:,0]
+    bnw_roi[bnw_roi > 0] = 1
+    roi_img = try_resize(np.array(bnw_roi, dtype = np.uint8))
+
+    # Use multiprocessing
+    processes = []
+    q = Queue(len(dirs))
+
     for i in range(len(dirs)):
-        p.print(i)
         dir = dirs[i]
 
         # Skip the data.txt and roi.png
@@ -224,11 +241,6 @@ def unity(SOURCE_PATH, EXPORT_PATH):
             image = image[:, :, :-1]
         
         img = np.array(image, dtype = np.uint8)
-
-        # Plot the image
-        # plt.figure()
-        # plt.imshow(img)
-        # plt.show()
         
         # This will serve as the key of our dictionaries
         img_name = dir[:-4]
@@ -244,18 +256,28 @@ def unity(SOURCE_PATH, EXPORT_PATH):
         
         # Turn this into a numpy array to make the density map
         c = np.array(c, dtype = int)
-        dmap = coords_to_density_map(c, sigma = 5, sha = img.shape[:-1])
-        
-        dmap = try_resize(dmap)
+
+        # Use multiprocessing to speed up (hopefully) the process of making datamaps
+        p = Process(target = make_dmap_parallel, args = (q, img_name, i, img, c))
+        p.start()
+        processes.append(p)
+
+        # Resize image
         img = try_resize(img)
 
         # Same format as above: keys = image name, values = tuple(frame index, image/roi/dmap)
         images[img_name] = (i, img)
         roi[img_name] = (i, roi_img)
-        dmaps[img_name] = (i, dmap)
-    
-    p.finish()
-    
+
+    # Wait for the multiprocesses to finish
+    for p in processes:
+        p.join()
+        yield
+
+    qs = q.qsize()
+    dmaps_from_q = [q.get() for i in range(qs)]
+    dmaps = {t[0]: (t[1], t[2]) for t in dmaps_from_q}
+
     # Offload our work to other functions like a true lazy computer programmer 
     make_data(images, roi, dmaps, EXPORT_PATH)
 
@@ -263,4 +285,4 @@ def unity(SOURCE_PATH, EXPORT_PATH):
 # Entry point
 # Test your code first cuz making density maps takes foreve
 if __name__ == "__main__":
-    unity(SOURCE_PATH="./unity/Set 0", EXPORT_PATH="./datas/Unity Batch 0")
+    unity(SOURCE_PATH="./unity/Set 2", EXPORT_PATH="./datas/Unity Batch 2")
