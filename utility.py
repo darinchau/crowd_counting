@@ -8,62 +8,37 @@ import re
 
 hehehaha = "hehehaha"
 
-# Progress bar
-# Initialize printer before use
-# Then update the printer using the print function in every iteration
-# Finally just let it kill itself or call printer.finish() to release the print flush
-class Printer:
-    def __init__(self, total_fr, description = " ", print_every = 0.2, len_bar = 40, pad = 10, enabled = True):
-        self.total_fr = total_fr
-        self.print_every = print_every
-        self.len_bar = len_bar
-        self.last = ""
-        self.__enabled = enabled
-        self.description = description
-        if description[-1] != " ":
-            self.description += " "
-        self.t = 0
-        self.last_t = time.time()
-        self.last_desc = ""
+# Alternative, simpler implementation
+# Simple progress bar for multiprocessing
+class ProgressBar:
+    def __init__(self, total_fr, len_bar = 40, pad = 10):
+      self.fr = 0
+      self.total_fr = total_fr
+      self.len_bar = len_bar
+      self.last = ""
+      self.__enabled = True
+      self.pad = pad
+      self.increment(0)
         
-        # Do padding to avoid trailing zeros
-        self.pad = pad
-
-        self.print(0, "", True)
-    
     def finish(self):
-        if self.__enabled:
-            self.print(self.total_fr, self.last_desc)
-            self.__enabled = False
-            print()
-  
-    def print(self, fr, description = "data", force = False):
-        if not self.__enabled:
-            return
-        
-        # Increment time
-        # If time > print_every_time_interval or last one or force out:
-        #   do printing na
-        
-        t = time.time()
-        self.t += t - self.last_t
-        self.last_t = t
-        self.last_desc = description
-        
-        if self.t >= self.print_every or fr >= self.total_fr - 1 or force:
-            ratio = round(fr/self.total_fr * self.len_bar)
-            st = self.description + description + ": [" + ratio * "=" + (self.len_bar - ratio) * " " + "]  " + str(fr) + "/" + str(self.total_fr) + " " * self.pad
-            print("\b" * len(self.last) + st, end = "", flush = True)
-            self.t = 0
-            self.last = st
-        
-        self.last_desc = description
+      self.disable()
+      print()
 
-    def __del__(self):
-        self.finish()
+    def increment(self, n = 1):
+      if not self.__enabled:
+          return
+
+      self.fr += n
+
+      ratio = round(self.fr/self.total_fr * self.len_bar)
+      st = "[" + ratio * "=" + (self.len_bar - ratio) * " " + "]  " + str(self.fr) + "/" + str(self.total_fr) + " " * self.pad
+      print("\b" * len(self.last) + st, end = "", flush = True)
+      self.t = 0
+      self.last = st
 
     def disable(self):
-        self.__enabled = False
+      self.__enabled = False
+
 
 class Timer:
     @staticmethod
@@ -101,7 +76,7 @@ class Event():
             pass
 
 class History:
-    def __init__(self, total_data, epochs, seed = 42069, progress_bar = True):
+    def __init__(self, total_data, epochs, seed = 42069):
         # (Generate and) save the seed
         if seed is None:
             seed = np.random.randint(2147483647)
@@ -120,26 +95,15 @@ class History:
         
         # Is_best is a temporary flag that gets set to true if the best epoch is updated
         self.is_Best = False
-        
-        # Makes a kill switch for the printer so its easier to have some fun
-        self.verbose = progress_bar
 
     def new_epoch(self):        
         self.is_Best = False
         self.current_epoch += 1
-        description = f"Current epoch: {self.current_epoch}, "
-        self.printer = Printer(self.total_data, description = description, enabled = self.verbose)
-        
         self.correct = 0
     
-    def increment(self, current_progress, train_loss, train_acc):
+    def increment(self, train_loss, train_acc):
         self.history["train_loss"].append(train_loss)
         self.history["train_acc"].append(train_acc)
-        
-        # len(X) is really batch size. Makes the fancy progress bar thing
-        description = f"loss: {round(train_loss, 5)}, acc: {round(train_acc, 5)} "
-        self.printer.print(current_progress, description)
-        print(description)
     
     def validate(self, val_loss, val_acc):
         self.history["val_loss"].append(val_loss)
@@ -151,7 +115,6 @@ class History:
             self.best_epoch = self.current_epoch
             self.is_Best = True
         
-        self.printer.finish()
         print(f"Validation: loss = {val_loss}, MAE = {val_acc}")
 
 
@@ -164,9 +127,6 @@ class History:
         self.best_val_acc = src.best_val_acc
         self.best_epoch = src.best_epoch
         self.current_epoch = src.current_epoch
-
-    def print(self, *args, **kwargs):
-        self.printer.print_in(*args, **kwargs)
 
 
 def save_net(fname, net):

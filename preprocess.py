@@ -1,8 +1,7 @@
-from alive_progress import alive_bar
 from scipy import ndimage
 from multiprocessing import Process, Queue
 from unitysrc import process_unity_data
-from utility import Printer, searchFile
+from utility import Printer, searchFile, ProgressBar
 import cv2
 import h5py
 import json
@@ -207,16 +206,12 @@ def unity(SOURCE_PATH, EXPORT_PATH):
     dirs.sort()
     
     # dmaps will be done via multiprocessing
-    images, roi = {}, {}
+    images, roi, dmaps = {}, {}, {}
 
     # Preload the roi since it is the same for every image
     bnw_roi = cv2.imread(SOURCE_PATH + "/" + "roi.png")[:,:,0]
     bnw_roi[bnw_roi > 0] = 1
     roi_img = try_resize(np.array(bnw_roi, dtype = np.uint8))
-
-    # Use multiprocessing
-    processes = []
-    q = Queue(len(dirs))
 
     for i in range(len(dirs)):
         dir = dirs[i]
@@ -257,10 +252,8 @@ def unity(SOURCE_PATH, EXPORT_PATH):
         # Turn this into a numpy array to make the density map
         c = np.array(c, dtype = int)
 
-        # Use multiprocessing to speed up (hopefully) the process of making datamaps
-        p = Process(target = make_dmap_parallel, args = (q, img_name, i, img, c))
-        p.start()
-        processes.append(p)
+        # dmap = coords_to_density_map(c, sigma = 5, sha = img.shape[:-1])
+        # dmap = try_resize(dmap)
 
         # Resize image
         img = try_resize(img)
@@ -268,15 +261,9 @@ def unity(SOURCE_PATH, EXPORT_PATH):
         # Same format as above: keys = image name, values = tuple(frame index, image/roi/dmap)
         images[img_name] = (i, img)
         roi[img_name] = (i, roi_img)
+        # dmaps[img_name] = (i, dmap)
 
-    # Wait for the multiprocesses to finish
-    for p in processes:
-        p.join()
         yield
-
-    qs = q.qsize()
-    dmaps_from_q = [q.get() for i in range(qs)]
-    dmaps = {t[0]: (t[1], t[2]) for t in dmaps_from_q}
 
     # Offload our work to other functions like a true lazy computer programmer 
     make_data(images, roi, dmaps, EXPORT_PATH)

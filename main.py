@@ -88,7 +88,7 @@ def main(args):
         batch_size = args.batch_size)
     
     # Sets up training history
-    history = History(len(train_dataloader.dataset), args.epochs, seed = None, progress_bar = args.progress_bar)
+    history = History(len(train_dataloader.dataset), args.epochs, seed = None)
 
     # Tries to load checkpoint. Everything is updated by reference
     Load_Checkpoint(args.pre, history, model, optimizer)
@@ -166,7 +166,7 @@ def train(dataloader, model, optimizer, history, batch_size, test_mode = False):
             mae = mae.item()
 
         # Update the result
-        history.increment(batch * len(X), loss, mae)
+        history.increment(loss, mae)
 
 
 def test(dataloader, model, batch_size, history):
