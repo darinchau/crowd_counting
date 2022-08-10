@@ -1,8 +1,8 @@
 ## Introduction
 
-This research project on crowd counting follows the work of Parasite-Host Network by JiaJie Li et. al. https://jiajie.media/portfolio/phnet/. The work is conducted under the supervision of Prof. Chan Sheung-Han Gary and his research fellow Sizhe Song, and approved by the UROP office in HKUST.
+This research project on crowd counting follows the work of Parasite-Host Network by JiaJie Li et. al. https://jiajie.media/portfolio/phnet/. The work is conducted under the supervision of Prof. Chan Sheung-Han Gary and his research fellow Mr. Sizhe Song, and approved by the UROP office in HKUST.
 
-This README shall contain some instructions for training, as well as the documentation of the code and the explaination of the overall folder structure.
+This README shall contain some instructions for training.
 
 ## Training instructions
 #### Step 1: Preprocessing
@@ -80,3 +80,5 @@ If set to true, instead of training in the training loop, the code will plot the
 
 ## Documentation
 We would probably not add these unless it is heavily requested. Meanwhile please look at the comments in the code - I hope they are sufficient. If you need help, feel free to raise an issue on GitHub.
+
+## The Unity dataset

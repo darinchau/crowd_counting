@@ -9,35 +9,36 @@ import re
 hehehaha = "hehehaha"
 
 # Alternative, simpler implementation
-# Simple progress bar for multiprocessing
+# Simple progress bar
 class ProgressBar:
-    def __init__(self, total_fr, len_bar = 40, pad = 10):
-      self.fr = 0
-      self.total_fr = total_fr
-      self.len_bar = len_bar
-      self.last = ""
-      self.__enabled = True
-      self.pad = pad
-      self.increment(0)
+    def __init__(self, total_fr, task_name, len_bar = 40, pad = 10):
+        print(task_name)
+        self.fr = 0
+        self.total_fr = total_fr
+        self.len_bar = len_bar
+        self.last = ""
+        self.__enabled = True
+        self.pad = pad
+        self.increment(0)
         
     def finish(self):
-      self.disable()
-      print()
+        self.disable()
+        print()
 
     def increment(self, n = 1):
-      if not self.__enabled:
-          return
+        if not self.__enabled:
+            return
 
-      self.fr += n
+        self.fr += n
 
-      ratio = round(self.fr/self.total_fr * self.len_bar)
-      st = "[" + ratio * "=" + (self.len_bar - ratio) * " " + "]  " + str(self.fr) + "/" + str(self.total_fr) + " " * self.pad
-      print("\b" * len(self.last) + st, end = "", flush = True)
-      self.t = 0
-      self.last = st
+        ratio = round(self.fr/self.total_fr * self.len_bar)
+        st = "[" + ratio * "=" + (self.len_bar - ratio) * " " + "]  " + str(self.fr) + "/" + str(self.total_fr) + " " * self.pad
+        print("\b" * len(self.last) + st, end = "", flush = True)
+        self.t = 0
+        self.last = st
 
     def disable(self):
-      self.__enabled = False
+        self.__enabled = False
 
 
 class Timer:
