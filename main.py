@@ -273,7 +273,6 @@ if __name__ == "__main__":
     parser.add_argument('--pre', '-p', metavar='PRETRAINED', default=None,type=str, help='path to the pretrained model')
     parser.add_argument('--batch_size', '-bs', metavar='BATCHSIZE' ,type=int, help='batch size', default=2)
     parser.add_argument('--task',metavar='TASK', type=str, help='task id to use.', default="1")
-    parser.add_argument('--progress_bar', metavar='PBAR' ,type=bool, help='Whether to use progress bar or not', default=False)
     parser.add_argument('--debug', metavar='PBAR' ,type=bool, help='Whether to actually pass the model through the data or not', default=False)
     parser.add_argument('--user_dir', metavar="USERDIR", type=str, default="./")
 

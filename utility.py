@@ -105,6 +105,7 @@ class History:
     def increment(self, train_loss, train_acc):
         self.history["train_loss"].append(train_loss)
         self.history["train_acc"].append(train_acc)
+        print(f"Training: loss = {train_loss}, MAE = {train_acc}")
     
     def validate(self, val_loss, val_acc):
         self.history["val_loss"].append(val_loss)

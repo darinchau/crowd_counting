@@ -58,8 +58,8 @@ class listDataset(Dataset):
 
     # This helps us preload the paths of all the data so we don't need to do this like 500 times during training
     def preload_data(self, data_name):
-        img_path = self.root_dir + "datas" + "/" + data_name + "/images"
-        dmap_path = self.root_dir + "datas" + "/" + data_name + "/dmaps"
+        img_path = self.root_dir + data_name + "/images"
+        dmap_path = self.root_dir + data_name + "/dmaps"
 
         # with open(self.root_dir + data_name + "/meta.txt") as f:
         #     meta = f.readlines()

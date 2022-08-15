@@ -7,6 +7,7 @@ import cv2
 import h5py
 import json
 import mat4py
+import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -104,17 +105,15 @@ def make_data(images: dict, roi: dict, dmaps: dict, EXPORT_PATH: str):
         # values are tuples (image name, image, density map)
         processed_imgs[images[lis[i]][0]] = (lis[i], img, img_dmap)
     
-    # Get the highest key number
-    max_key = np.array(list(processed_imgs.keys()), dtype = int).max()
-
     # Loop through dictionary to get processed data
-    for i in range(max_key):
-        # Can 3d evaluates to true if (say IMAGE_NUM = 3) i-1, i, i+1 are all valid frames
+    for i in processed_imgs.keys():
+        # Can 3d evaluates to true if (say IMAGE_NUM = 3) i-2, i-1, i are all valid frames
         idxs = list(range(i - IMAGE_NUM + 1, i + 1))
         can_3d = np.all([j in list(processed_imgs.keys()) for j in idxs])
         if not can_3d:
             continue
 
+        # Make directories for image base path
         path_name = EXPORT_PATH + "/" + "images" + "/" + processed_imgs[i][0]
         mkdir(path_name)
 
@@ -122,9 +121,14 @@ def make_data(images: dict, roi: dict, dmaps: dict, EXPORT_PATH: str):
         dmap_path = EXPORT_PATH + "/" + "dmaps" + "/" + processed_imgs[i][0] + ".npy"
         np.save(dmap_path, processed_imgs[i][2])
 
+        # Also save a image of the dmap for easy visualization
+        dmap_img_path = dmap_path[:-4] + ".jpg"
+        mpimg.imsave(dmap_img_path, processed_imgs[i][2])
+
+        # Save he images
         for j in idxs:
             img_path = path_name + "/" + processed_imgs[j][0] + ".jpg"
-            cv2.imwrite(img_path, processed_imgs[i][1])
+            cv2.imwrite(img_path, processed_imgs[j][1])
 
 #########################################################
 ########### This processes the venice dataset ###########
@@ -399,7 +403,7 @@ def crowdflow(src, export, ds_name, _check_frame = False):
 if __name__ == "__main__":
     # This is convenint if we want to have 20 terminals open at the same time doing our thing
     process = int(sys.argv[1])
-    # This is also convenient if we want to discover horribly labelled datasets
+    # This is also convenient if we want to discover horribly labelled datasets like the unity one with bugs
     try:
         should_check_frame = bool(sys.argv[2])
     except: 
@@ -413,7 +417,7 @@ if __name__ == "__main__":
 
     # Unity test batches
     if process == 3:
-        unity(SOURCE_PATH="./unity/test batch 1", EXPORT_PATH="./datas/Unity Test Batch 1", _check_frame = True)
+        unity(SOURCE_PATH="./unity/test batch 1", EXPORT_PATH="./datas/Unity Test Batch 1", _check_frame = should_check_frame)
     
     # 21 - 29 corresponds to unity batch 1-9. Idk how many batchs I will make
     if process > 20 and process < 30:
